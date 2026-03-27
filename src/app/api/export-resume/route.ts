@@ -7,8 +7,6 @@ import {
   TextRun,
   AlignmentType,
   BorderStyle,
-  TabStopType,
-  TabStopPosition,
 } from "docx";
 
 const BLUE = "1F4E79";
@@ -254,7 +252,7 @@ export async function POST(request: NextRequest) {
     // Try getting resume content from the database first
     let markdownContent = "";
 
-    const { data: resumeRecords, error: dbError } = await supabase
+    const { data: resumeRecords } = await supabase
       .from("generated_resumes")
       .select("editorial_notes")
       .eq("file_path", file_path)

@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { UploadDocuments } from "@/components/profile/upload-documents";
@@ -19,14 +18,12 @@ import {
   Link as LinkIcon,
   PenLine,
   ClipboardPaste,
-  Merge,
   RefreshCw,
   CheckCircle2,
   FileText,
   Globe,
   Pen,
   Plus,
-  ChevronDown,
 } from "lucide-react";
 
 export default function ProfilePage() {
