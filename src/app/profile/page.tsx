@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   PenLine,
   ClipboardPaste,
   Merge,
+  RefreshCw,
   CheckCircle2,
   FileText,
   Globe,
@@ -40,10 +41,31 @@ export default function ProfilePage() {
     "upload" | "link" | "manual" | "paste" | "merge" | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const isInitialLoad = useRef(true);
+
+  async function regenerateSummary() {
+    if (!user) return;
+    setSummaryLoading(true);
+    try {
+      const res = await fetch("/api/generate-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      if (data.summary) setSummary(data.summary);
+    } catch {
+      // Silently fail — summary is non-critical
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [entriesRes, chunksRes, docsRes, urlsRes] = await Promise.all([
+    const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
       supabase
         .from("profile_entries")
         .select("*")
@@ -63,14 +85,26 @@ export default function ProfilePage() {
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("users")
+        .select("profile_summary")
+        .eq("id", user.id)
+        .single(),
     ]);
 
     if (entriesRes.data) setEntries(entriesRes.data);
     if (chunksRes.data) setChunks(chunksRes.data);
     if (docsRes.data) setDocuments(docsRes.data);
     if (urlsRes.data) setUrls(urlsRes.data);
+    if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
     setLoading(false);
     refreshProfile();
+
+    // Auto-regenerate summary on data changes (not initial load)
+    if (!isInitialLoad.current && (entriesRes.data?.length ?? 0) > 0) {
+      regenerateSummary();
+    }
+    isInitialLoad.current = false;
   }, [user, supabase, refreshProfile]);
 
   useEffect(() => {
@@ -93,11 +127,37 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="mb-2 text-2xl font-bold">Profile</h1>
-      <p className="mb-8 text-muted-foreground">
+      <p className="mb-6 text-muted-foreground">
         {isNewUser
           ? "Get started by adding your experience. Complete at least one item to unlock resume generation."
           : "Manage your career profile data. Everything you add here is used to generate tailored resumes."}
       </p>
+
+      {/* AI-generated summary */}
+      {!isNewUser && (
+        <div className="mb-8 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              AI Summary
+            </h3>
+            <button
+              onClick={regenerateSummary}
+              disabled={summaryLoading}
+              className="flex items-center gap-1 text-[11px] text-[var(--accent)] hover:text-[var(--accent-dark)] disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={summaryLoading ? "animate-spin" : ""} />
+              {summaryLoading ? "Generating..." : "Regenerate"}
+            </button>
+          </div>
+          {summary ? (
+            <p className="text-sm leading-relaxed text-[var(--text-primary)]">{summary}</p>
+          ) : (
+            <p className="text-sm italic text-[var(--text-faint)]">
+              {summaryLoading ? "Generating summary..." : "No summary yet. Click \"Regenerate\" to create one."}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Onboarding for new users — card grid */}
       {isNewUser && !activeSection && (
