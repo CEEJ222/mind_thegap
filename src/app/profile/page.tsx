@@ -227,7 +227,7 @@ export default function ProfilePage() {
 
       {/* Two-column layout */}
       {!isNewUser && (
-        <div className="flex gap-8">
+        <div className="flex flex-col-reverse md:flex-row gap-6 md:gap-8">
           {/* Left column — Profile entries */}
           <div className="flex-1 min-w-0">
             {activeSection === "merge" && (
@@ -252,9 +252,9 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Right column — Files & Links */}
-          <div className="w-[300px] flex-shrink-0 overflow-hidden">
-            <div className="sticky top-6 max-h-[calc(100vh-120px)] overflow-y-auto">
+          {/* Right column — Files & Links (top on mobile, right on desktop) */}
+          <div className="w-full md:w-[300px] md:flex-shrink-0 overflow-hidden">
+            <div className="md:sticky md:top-6 md:max-h-[calc(100vh-120px)] md:overflow-y-auto">
               {/* Add actions dropdown */}
               <div className="relative mb-4">
                 <Button
