@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
-import { Merge, Check, X, ArrowRight } from "lucide-react";
+import { Merge, Check, ArrowRight } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

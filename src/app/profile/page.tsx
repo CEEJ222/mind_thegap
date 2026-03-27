@@ -105,6 +105,7 @@ export default function ProfilePage() {
       regenerateSummary();
     }
     isInitialLoad.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);
 
   useEffect(() => {

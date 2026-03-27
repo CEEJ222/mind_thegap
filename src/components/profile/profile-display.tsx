@@ -694,41 +694,6 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     );
   }
 
-  // Extract action buttons rendering
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function renderActions(entry: any, isConfirmingDelete: boolean) {
-    return (
-      <div className="ml-2 flex items-center gap-1">
-        <button
-          onClick={() => { setLinkingId(linkingId === entry.id ? null : entry.id); setLinkUrl(""); }}
-          className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
-          title="Add URL"
-        >
-          <LinkIcon size={14} />
-        </button>
-        <button
-          onClick={() => startEditing(entry)}
-          className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
-        >
-          <Pencil size={14} />
-        </button>
-        {isConfirmingDelete ? (
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="destructive" onClick={() => handleDelete(entry.id)} className="h-7 px-2 text-xs">Delete</Button>
-            <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setDeletingId(entry.id)}
-            className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--red-muted)]"
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
-      </div>
-    );
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function renderFlatSection(title: string, items: any[]) {
     if (items.length === 0) return null;
