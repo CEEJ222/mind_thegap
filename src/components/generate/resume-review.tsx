@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
+import { Loader2 } from "lucide-react";
 import { Download, RefreshCw, Plus } from "lucide-react";
 
 interface ResumeResult {
@@ -35,39 +36,41 @@ export function ResumeReview({
   onRegenerate,
   onNewAnalysis,
 }: Props) {
-  const supabase = createClient();
   const notes = resume.editorial_notes;
+  const [downloading, setDownloading] = useState(false);
 
   async function handleDownload() {
     if (!resume.file_path) return;
+    setDownloading(true);
+
     try {
-      const { data, error } = await supabase.storage
-        .from("resumes")
-        .download(resume.file_path);
+      const fileName = `${analysis.company_name?.replace(/\s+/g, "_") || "resume"}_${analysis.job_title?.replace(/\s+/g, "_") || "role"}`;
 
-      if (error || !data) {
-        console.error("Download error:", error);
-        // Fallback: try signed URL
-        const { data: urlData } = await supabase.storage
-          .from("resumes")
-          .createSignedUrl(resume.file_path, 60);
-        if (urlData?.signedUrl) {
-          window.open(urlData.signedUrl, "_blank");
-        }
-        return;
-      }
+      const res = await fetch("/api/export-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_path: resume.file_path,
+          format: "docx",
+          file_name: fileName,
+        }),
+      });
 
-      // Create download link from blob
-      const url = URL.createObjectURL(data);
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `resume_${analysis.company_name?.replace(/\s+/g, "_") || "download"}.md`;
+      a.download = `${fileName}.docx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Download failed:", err);
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -130,9 +133,13 @@ export function ResumeReview({
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleDownload} size="lg">
-          <Download className="mr-2 h-4 w-4" />
-          Download Resume
+        <Button onClick={handleDownload} size="lg" disabled={downloading}>
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {downloading ? "Exporting..." : "Download Resume (.docx)"}
         </Button>
         <Button variant="outline" onClick={onRegenerate}>
           <RefreshCw className="mr-2 h-4 w-4" />
