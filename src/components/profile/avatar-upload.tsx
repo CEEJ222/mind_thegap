@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
-import { Camera } from "lucide-react";
+import { Camera, X } from "lucide-react";
 
 interface Props {
   fullName: string;
@@ -89,6 +89,25 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
     }
   }
 
+  async function handleRemove() {
+    if (!user) return;
+    setUploading(true);
+    try {
+      // Remove from storage
+      await supabase.storage.from("avatars").remove([`${user.id}/avatar.jpg`]);
+      // Clear URL in DB
+      await supabase.from("users").update({ avatar_url: null }).eq("id", user.id);
+      setLocalUrl(null);
+      showSnackbar("Avatar removed");
+      onUpdate();
+    } catch (err) {
+      console.error("Remove failed:", err);
+      showSnackbar("Failed to remove avatar", "error");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const initials = getInitials(fullName || "User");
 
   return (
@@ -130,6 +149,16 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
           </div>
         )}
       </button>
+
+      {localUrl && (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-faint)] hover:text-[var(--red-muted)] hover:border-[var(--red-muted)] shadow-sm"
+          title="Remove photo"
+        >
+          <X size={12} />
+        </button>
+      )}
 
       <input
         ref={fileRef}
