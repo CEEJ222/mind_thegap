@@ -40,11 +40,34 @@ export function ResumeReview({
 
   async function handleDownload() {
     if (!resume.file_path) return;
-    const { data } = await supabase.storage
-      .from("resumes")
-      .createSignedUrl(resume.file_path, 60);
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, "_blank");
+    try {
+      const { data, error } = await supabase.storage
+        .from("resumes")
+        .download(resume.file_path);
+
+      if (error || !data) {
+        console.error("Download error:", error);
+        // Fallback: try signed URL
+        const { data: urlData } = await supabase.storage
+          .from("resumes")
+          .createSignedUrl(resume.file_path, 60);
+        if (urlData?.signedUrl) {
+          window.open(urlData.signedUrl, "_blank");
+        }
+        return;
+      }
+
+      // Create download link from blob
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `resume_${analysis.company_name?.replace(/\s+/g, "_") || "download"}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
     }
   }
 
