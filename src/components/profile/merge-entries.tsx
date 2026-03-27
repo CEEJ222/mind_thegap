@@ -169,7 +169,7 @@ export function MergeEntries({ entries, chunks, onComplete, onCancel }: Props) {
       </p>
 
       <div className="max-h-[400px] space-y-2 overflow-y-auto">
-        {entries.map((entry: { id: string; company_name: string; job_title: string; date_start: string | null; date_end: string | null; entry_type: string }) => {
+        {entries.filter((e: { entry_type: string }) => e.entry_type !== "skills" && e.entry_type !== "certification").map((entry: { id: string; company_name: string; job_title: string; date_start: string | null; date_end: string | null; entry_type: string }) => {
           const isSelected = selectedIds.includes(entry.id);
           const entryChunks = getChunksForEntry(entry.id);
 
