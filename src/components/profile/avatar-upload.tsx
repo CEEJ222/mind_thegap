@@ -43,7 +43,7 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.9);
+        canvas.toBlob((blob) => resolve(blob!), "image/png");
       };
       img.src = URL.createObjectURL(file);
     });
@@ -55,12 +55,12 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
     setUploading(true);
 
     try {
-      const resized = await resizeImage(file, 400);
-      const filePath = `${user.id}/avatar.jpg`;
+      const resized = await resizeImage(file, 600);
+      const filePath = `${user.id}/avatar.png`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, resized, { upsert: true, contentType: "image/jpeg" });
+        .upload(filePath, resized, { upsert: true, contentType: "image/png" });
 
       if (uploadError) throw uploadError;
 
@@ -94,7 +94,7 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
     setUploading(true);
     try {
       // Remove from storage
-      await supabase.storage.from("avatars").remove([`${user.id}/avatar.jpg`]);
+      await supabase.storage.from("avatars").remove([`${user.id}/avatar.png`]);
       // Clear URL in DB
       await supabase.from("users").update({ avatar_url: null }).eq("id", user.id);
       setLocalUrl(null);
