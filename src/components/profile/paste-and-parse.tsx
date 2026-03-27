@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, ClipboardPaste } from "lucide-react";
 import { showSnackbar } from "@/components/ui/snackbar";
@@ -13,6 +15,8 @@ interface Props {
 
 export function PasteAndParse({ onComplete }: Props) {
   const { user } = useAuth();
+  const supabase = createClient();
+  const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [parsing, setParsing] = useState(false);
 
@@ -21,19 +25,40 @@ export function PasteAndParse({ onComplete }: Props) {
     setParsing(true);
 
     try {
+      const label = title.trim() || `Pasted content — ${new Date().toLocaleDateString()}`;
+      const lineCount = text.split("\n").length;
+
+      // Create a document record so it appears in "Uploaded Files & Links"
+      const { data: docRecord, error: dbError } = await supabase
+        .from("uploaded_documents")
+        .insert({
+          user_id: user.id,
+          file_name: label,
+          file_path: `pasted/${user.id}/${Date.now()}`,
+          file_type: "text/plain",
+          document_type: "other",
+          processing_status: "processing",
+        })
+        .select("id")
+        .single();
+
+      if (dbError) throw dbError;
+
       const res = await fetch("/api/process-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user.id,
           pasted_text: text,
+          document_id: docRecord?.id,
         }),
       });
 
       if (!res.ok) throw new Error("Processing failed");
 
+      setTitle("");
       setText("");
-      showSnackbar("Content parsed — profile updated");
+      showSnackbar(`"${label}" parsed — ${lineCount} lines processed`);
       onComplete();
     } catch (err) {
       console.error("Parse failed:", err);
@@ -47,9 +72,15 @@ export function PasteAndParse({ onComplete }: Props) {
     <div>
       <h3 className="mb-2 text-lg font-semibold">Paste & Parse</h3>
       <p className="mb-4 text-sm text-[var(--text-muted)]">
-        Paste a resume, job description, performance review, or any career document.
+        Paste a resume, project write-up, performance review, or any career document.
         The AI will extract and structure it automatically.
       </p>
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Label (e.g. 'Google PM Resume', 'Project write-up')"
+        className="mb-3 border-[var(--border-input)] bg-[var(--bg-card)] text-sm placeholder:text-[var(--text-faint)]"
+      />
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

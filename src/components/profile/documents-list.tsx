@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
-import { FileText, Trash2, Loader2, ExternalLink } from "lucide-react";
+import { FileText, ClipboardPaste, Trash2, Loader2, ExternalLink } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,7 +91,11 @@ export function DocumentsList({ documents, urls, onUpdate }: Props) {
             className="flex items-center justify-between rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3"
           >
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-[var(--text-muted)]" />
+              {doc.file_path?.startsWith("pasted/") ? (
+                <ClipboardPaste className="h-5 w-5 text-[var(--text-muted)]" />
+              ) : (
+                <FileText className="h-5 w-5 text-[var(--text-muted)]" />
+              )}
               <div>
                 <div className="text-sm font-medium text-[var(--text-primary)]">
                   {doc.file_name}

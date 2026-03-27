@@ -201,11 +201,17 @@ Return ONLY valid JSON.`,
       }
     }
 
+    // Mark document as completed (works for both file uploads and pasted content)
     if (file_path) {
       await supabase
         .from("uploaded_documents")
         .update({ processing_status: "completed" })
         .eq("file_path", file_path);
+    } else if (docId) {
+      await supabase
+        .from("uploaded_documents")
+        .update({ processing_status: "completed" })
+        .eq("id", docId);
     }
 
     return NextResponse.json({ success: true });
