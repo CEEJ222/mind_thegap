@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [entries, setEntries] = useState<any[]>([]);
@@ -58,7 +58,8 @@ export default function ProfilePage() {
     if (docsRes.data) setDocuments(docsRes.data);
     if (urlsRes.data) setUrls(urlsRes.data);
     setLoading(false);
-  }, [user, supabase]);
+    refreshProfile();
+  }, [user, supabase, refreshProfile]);
 
   useEffect(() => {
     loadData();

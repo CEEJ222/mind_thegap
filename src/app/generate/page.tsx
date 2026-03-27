@@ -42,7 +42,7 @@ interface ResumeResult {
 type Step = "input" | "analysis" | "review";
 
 export default function GeneratePage() {
-  const { user, hasProfile } = useAuth();
+  const { user, hasProfile, loading } = useAuth();
   const { setTopNav, clearTopNav } = useAppShell();
   const router = useRouter();
   const [jdText, setJdText] = useState("");
@@ -53,10 +53,10 @@ export default function GeneratePage() {
   const [resume, setResume] = useState<ResumeResult | null>(null);
 
   useEffect(() => {
-    if (!hasProfile) {
+    if (!loading && !hasProfile) {
       router.push("/profile");
     }
-  }, [hasProfile, router]);
+  }, [hasProfile, loading, router]);
 
   // Update top nav when analysis changes
   useEffect(() => {
@@ -72,8 +72,12 @@ export default function GeneratePage() {
     return () => clearTopNav();
   }, [analysis, setTopNav, clearTopNav]);
 
-  if (!hasProfile) {
-    return null;
+  if (loading || !hasProfile) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    );
   }
 
   async function handleAnalyze() {

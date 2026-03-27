@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useRef,
+  useCallback,
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +29,7 @@ interface AuthContextType {
   loading: boolean;
   hasProfile: boolean;
   refreshSettings: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -37,6 +39,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   hasProfile: false,
   refreshSettings: async () => {},
+  refreshProfile: async () => {},
   signOut: async () => {},
 });
 
@@ -65,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasProfile((profileRes.count ?? 0) > 0);
   }
 
-  async function refreshSettings() {
+  const refreshSettings = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from("user_settings")
@@ -73,7 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", user.id)
       .single();
     if (data) setSettings(data as UserSettings);
-  }
+  }, [user, supabase]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from("profile_entries")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    setHasProfile((count ?? 0) > 0);
+  }, [user, supabase]);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -86,7 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialized.current) return;
     initialized.current = true;
 
-    // Check initial session
     supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => {
       const currentUser = data.user;
       setUser(currentUser);
@@ -97,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event: string, session: { user: User | null } | null) => {
@@ -115,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, settings, loading, hasProfile, refreshSettings, signOut }}
+      value={{ user, settings, loading, hasProfile, refreshSettings, refreshProfile, signOut }}
     >
       {children}
     </AuthContext.Provider>
