@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     const user_id = docBody.user_id as string;
     const file_path = docBody.file_path as string;
     const file_name = docBody.file_name as string;
+    const document_id = docBody.document_id as string | undefined;
 
     if (!user_id || !file_path) {
       return NextResponse.json(
@@ -18,6 +19,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient();
+
+    // Get the document ID if not passed
+    let docId = document_id;
+    if (!docId) {
+      const { data: doc } = await supabase
+        .from("uploaded_documents")
+        .select("id")
+        .eq("file_path", file_path)
+        .single();
+      docId = doc?.id;
+    }
 
     await supabase
       .from("uploaded_documents")
@@ -69,8 +81,10 @@ ${text}
 ## Instructions
 1. Classify the document type: resume, project_writeup, biz_case, award, certification, performance_review, or other.
 2. Extract each distinct job, project, education entry, award, or certification.
-3. For each entry, extract: entry_type (job/project/education/award/certification), company_name, job_title, date_start (YYYY-MM-DD), date_end (YYYY-MM-DD or null if current), industry, domain.
-4. For each entry, extract individual bullet points/achievements as separate chunks.
+3. IMPORTANT: If the same company appears with DIFFERENT job titles or date ranges, create SEPARATE entries for each role. For example, "Senior PM at Acme (2022-2023)" and "Director at Acme (2024-present)" must be two separate entries, not merged.
+4. For each entry, extract: entry_type (job/project/education/award/certification), company_name, job_title, date_start (YYYY-MM-DD), date_end (YYYY-MM-DD or null if current), industry, domain.
+5. For each entry, extract individual bullet points/achievements as separate chunks. Only include bullets that belong to THAT specific role.
+6. Extract a "skills" entry with entry_type "certification" and company_name "Skills & Expertise". Put each skill category as a separate chunk (e.g. "Product: User Story Creation, Roadmap Development, Agile/Scrum").
 
 Respond in this exact JSON format:
 {
@@ -102,35 +116,42 @@ Return ONLY valid JSON.`,
       .eq("file_path", file_path);
 
     for (const entry of parsed.entries) {
+      // Dedup: check for existing entry with same company_name AND job_title
       const { data: existing } = await supabase
         .from("profile_entries")
         .select("*")
         .eq("user_id", user_id)
         .eq("company_name", entry.company_name)
+        .eq("job_title", entry.job_title)
         .eq("user_confirmed", false);
 
       let entryId: string;
-      const hasOverlap = existing?.some((e: Record<string, string | null>) => {
-        if (!e.date_start || !entry.date_start) return false;
-        return e.company_name === entry.company_name;
-      });
 
-      if (hasOverlap && existing && existing.length > 0) {
+      if (existing && existing.length > 0) {
+        // Same company + same title = same role, merge chunks
         entryId = existing[0].id;
       } else {
+        // New entry
+        const insertData: Record<string, string | boolean | null> = {
+          user_id,
+          entry_type: entry.entry_type,
+          company_name: entry.company_name,
+          job_title: entry.job_title,
+          date_start: entry.date_start,
+          date_end: entry.date_end,
+          industry: entry.industry,
+          domain: entry.domain,
+          source: "resume_upload",
+        };
+
+        // Link to source document if available
+        if (docId) {
+          insertData.source_document_id = docId;
+        }
+
         const { data: newEntry } = await supabase
           .from("profile_entries")
-          .insert({
-            user_id,
-            entry_type: entry.entry_type,
-            company_name: entry.company_name,
-            job_title: entry.job_title,
-            date_start: entry.date_start,
-            date_end: entry.date_end,
-            industry: entry.industry,
-            domain: entry.domain,
-            source: "resume_upload",
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -138,6 +159,7 @@ Return ONLY valid JSON.`,
         entryId = newEntry.id;
       }
 
+      // Insert chunks with dedup
       for (const chunkText of entry.chunks) {
         const { data: existingChunks } = await supabase
           .from("profile_chunks")

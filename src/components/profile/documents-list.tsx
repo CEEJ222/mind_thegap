@@ -37,13 +37,16 @@ export function DocumentsList({ documents, urls, onUpdate }: Props) {
   async function handleDeleteDoc(doc: { id: string; file_path: string; user_id: string }) {
     setLoading(true);
     try {
+      // Delete related profile entries (chunks cascade via FK)
+      await supabase
+        .from("profile_entries")
+        .delete()
+        .eq("source_document_id", doc.id);
+
       // Delete the file from storage
       await supabase.storage.from("documents").remove([doc.file_path]);
 
-      // Delete related profile entries and chunks that came from this upload
-      // (chunks cascade from entries via FK)
-      // We can't perfectly trace which entries came from which file,
-      // so we delete the document record and let the user manage entries separately
+      // Delete the document record
       await supabase.from("uploaded_documents").delete().eq("id", doc.id);
 
       setDeletingDoc(null);

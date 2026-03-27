@@ -51,7 +51,7 @@ export function UploadDocuments({ onComplete }: Props) {
 
         if (uploadError) throw uploadError;
 
-        const { error: dbError } = await supabase
+        const { data: docRecord, error: dbError } = await supabase
           .from("uploaded_documents")
           .insert({
             user_id: user.id,
@@ -59,7 +59,9 @@ export function UploadDocuments({ onComplete }: Props) {
             file_path: filePath,
             file_type: file.type,
             processing_status: "pending",
-          });
+          })
+          .select("id")
+          .single();
 
         if (dbError) throw dbError;
 
@@ -71,6 +73,7 @@ export function UploadDocuments({ onComplete }: Props) {
             user_id: user.id,
             file_path: filePath,
             file_name: file.name,
+            document_id: docRecord?.id,
           }),
         });
 
