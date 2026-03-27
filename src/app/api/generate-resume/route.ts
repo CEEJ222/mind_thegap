@@ -23,12 +23,12 @@ export async function POST(request: NextRequest) {
           .from("applications")
           .select("*")
           .eq("id", application_id)
-          .single(),
+          .limit(1),
         supabase
           .from("user_settings")
           .select("*")
           .eq("user_id", user_id)
-          .single(),
+          .limit(1),
         supabase
           .from("profile_chunks")
           .select("*")
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
           .limit(1),
       ]);
 
-    const application = appRes.data;
-    const settings = settingsRes.data;
+    const application = appRes.data?.[0];
+    const settings = settingsRes.data?.[0];
     const chunks = chunksRes.data ?? [];
     const themes = themesRes.data ?? [];
     const nextVersion = ((existingRes.data?.[0]?.version ?? 0) as number) + 1;
