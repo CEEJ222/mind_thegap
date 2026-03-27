@@ -45,6 +45,7 @@ export default function ProfilePage() {
   >(null);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const isInitialLoad = useRef(true);
@@ -91,7 +92,7 @@ export default function ProfilePage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("users")
-        .select("profile_summary")
+        .select("profile_summary, avatar_url")
         .eq("id", user.id)
         .single(),
     ]);
@@ -101,6 +102,7 @@ export default function ProfilePage() {
     if (docsRes.data) setDocuments(docsRes.data);
     if (urlsRes.data) setUrls(urlsRes.data);
     if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
+    if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
     setLoading(false);
     refreshProfile();
 
@@ -139,7 +141,7 @@ export default function ProfilePage() {
       <div className="mb-6 flex items-center gap-5">
         <AvatarUpload
           fullName={user?.user_metadata?.full_name || user?.email || "User"}
-          avatarUrl={null}
+          avatarUrl={avatarUrl}
           onUpdate={loadData}
         />
         <div>

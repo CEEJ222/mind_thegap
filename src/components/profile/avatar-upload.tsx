@@ -33,16 +33,16 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
     setUploading(true);
 
     try {
-      const filePath = `${user.id}/avatar_${Date.now()}.${file.name.split(".").pop()}`;
+      const filePath = `${user.id}/avatar.${file.name.split(".").pop()}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("documents")
+        .from("avatars")
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from("documents")
+        .from("avatars")
         .getPublicUrl(filePath);
 
       const publicUrl = urlData?.publicUrl;
