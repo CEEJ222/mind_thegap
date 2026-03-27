@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
 
 const config: Config = {
   darkMode: "class",
@@ -19,13 +20,26 @@ const config: Config = {
         ring: "var(--ring)",
         muted: "var(--muted)",
         "muted-foreground": "var(--muted-foreground)",
+        "bg-base": "var(--bg-base)",
+        "bg-card": "var(--bg-card)",
+        "bg-overlay": "var(--bg-overlay)",
+        "text-primary": "var(--text-primary)",
+        "text-muted": "var(--text-muted)",
+        "text-faint": "var(--text-faint)",
+        "border-subtle": "var(--border-subtle)",
+        "border-input": "var(--border-input)",
         accent: {
-          DEFAULT: "#3DD9B3",
-          hover: "#2AB89A",
+          DEFAULT: "var(--accent)",
+          dark: "var(--accent-dark)",
+          deep: "var(--accent-deep)",
         },
-        warning: "#F59E0B",
-        error: "#E57373",
-        success: "#3DD9B3",
+        amber: {
+          DEFAULT: "var(--amber)",
+          text: "var(--amber-text)",
+        },
+        warning: "var(--amber)",
+        error: "var(--red-muted)",
+        success: "var(--accent)",
       },
       borderRadius: {
         lg: "16px",
@@ -33,7 +47,7 @@ const config: Config = {
         sm: "8px",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-dm-sans)", ...defaultTheme.fontFamily.sans],
       },
     },
   },

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useAppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { GapAnalysis } from "@/components/generate/gap-analysis";
@@ -42,6 +43,7 @@ type Step = "input" | "analysis" | "review";
 
 export default function GeneratePage() {
   const { user, hasProfile } = useAuth();
+  const { setTopNav, clearTopNav } = useAppShell();
   const router = useRouter();
   const [jdText, setJdText] = useState("");
   const [step, setStep] = useState<Step>("input");
@@ -55,6 +57,20 @@ export default function GeneratePage() {
       router.push("/profile");
     }
   }, [hasProfile, router]);
+
+  // Update top nav when analysis changes
+  useEffect(() => {
+    if (analysis) {
+      setTopNav({
+        companyName: analysis.company_name,
+        jobTitle: analysis.job_title,
+        fitScore: analysis.fit_score,
+      });
+    } else {
+      clearTopNav();
+    }
+    return () => clearTopNav();
+  }, [analysis, setTopNav, clearTopNav]);
 
   if (!hasProfile) {
     return null;
@@ -105,6 +121,10 @@ export default function GeneratePage() {
     }
   }
 
+  function handleUpdateAnalysis(updated: AnalysisResult) {
+    setAnalysis(updated);
+  }
+
   function handleReset() {
     setJdText("");
     setStep("input");
@@ -129,16 +149,20 @@ export default function GeneratePage() {
         analysis={analysis}
         onGenerate={handleGenerate}
         generating={generating}
-        onBack={() => setStep("input")}
+        onBack={() => {
+          setStep("input");
+          setAnalysis(null);
+        }}
+        onUpdateAnalysis={handleUpdateAnalysis}
       />
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-16">
-      <Sparkles className="mb-6 h-12 w-12 text-accent" />
-      <h1 className="mb-2 text-2xl font-bold">Generate a Tailored Resume</h1>
-      <p className="mb-8 text-muted-foreground">
+    <div className="mx-auto flex max-w-3xl flex-col items-center justify-center px-9 py-16">
+      <Sparkles className="mb-6 h-12 w-12 text-[var(--accent)]" />
+      <h1 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">Generate a Tailored Resume</h1>
+      <p className="mb-8 text-[var(--text-muted)]">
         Paste a job description and we&apos;ll analyze it against your profile
       </p>
       <div className="w-full">
@@ -147,7 +171,7 @@ export default function GeneratePage() {
           value={jdText}
           onChange={(e) => setJdText(e.target.value)}
           rows={12}
-          className="mb-4 resize-none text-base"
+          className="mb-4 resize-none border-[var(--border-input)] bg-[var(--bg-card)] text-base placeholder:text-[var(--text-faint)]"
         />
         <Button
           onClick={handleAnalyze}

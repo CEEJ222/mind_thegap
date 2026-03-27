@@ -1,15 +1,11 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { AppShell } from "@/components/layout/app-shell";
 import { SnackbarProvider } from "@/components/ui/snackbar";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
 
 export const metadata: Metadata = {
   title: "Mind the Gap — AI Resume Generator",
@@ -23,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} font-sans antialiased`}>
+    <html lang="en" className={dmSans.variable} suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <AuthProvider>
           <AppShell>{children}</AppShell>
           <SnackbarProvider />

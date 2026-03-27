@@ -2,20 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { cn, getScoreTierIcon } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
-import {
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  ArrowLeft,
-  FileText,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ScoreTier } from "@/lib/types/database";
 
 interface ThemeResult {
@@ -41,24 +33,100 @@ interface Props {
   onGenerate: () => void;
   generating: boolean;
   onBack: () => void;
+  onUpdateAnalysis: (updated: AnalysisResult) => void;
 }
 
-export function GapAnalysis({ analysis, onGenerate, generating, onBack }: Props) {
+function StatusIcon({ tier }: { tier: ScoreTier }) {
+  if (tier === "strong") {
+    return (
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgba(61,217,179,0.2)]">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#0F6E56" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+  if (tier === "weak") {
+    return (
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgba(245,158,11,0.15)]">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+          <path d="M6 3V6.5M6 8.5V9" stroke="#92400E" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgba(0,0,0,0.08)]">
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+        <path d="M3.5 3.5L8.5 8.5M8.5 3.5L3.5 8.5" stroke="#8C7E6A" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
+function getLeftBorderColor(tier: ScoreTier) {
+  switch (tier) {
+    case "strong": return "border-l-[var(--accent)]";
+    case "weak": return "border-l-[var(--amber)]";
+    case "none": return "border-l-[rgba(0,0,0,0.15)]";
+  }
+}
+
+function getScoreBarColor(tier: ScoreTier) {
+  switch (tier) {
+    case "strong": return "bg-[var(--accent)]";
+    case "weak": return "bg-[var(--amber)]";
+    case "none": return "bg-[rgba(0,0,0,0.15)]";
+  }
+}
+
+function getStatusText(tier: ScoreTier) {
+  switch (tier) {
+    case "strong": return { label: "Strong", className: "text-[var(--accent)]" };
+    case "weak": return { label: "Partial", className: "text-[var(--amber-text)]" };
+    case "none": return { label: "Missing", className: "text-[var(--text-muted)]" };
+  }
+}
+
+function getArrowColor(tier: ScoreTier) {
+  switch (tier) {
+    case "strong": return "text-[var(--accent)]";
+    case "weak": return "text-[var(--amber-text)]";
+    case "none": return "text-[var(--text-muted)]";
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdateAnalysis }: Props) {
   const { user } = useAuth();
+  const supabase = createClient();
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
+  const [disputeTheme, setDisputeTheme] = useState<string | null>(null);
   const [themes, setThemes] = useState(analysis.themes);
   const [gapFillText, setGapFillText] = useState("");
   const [gapFillCompany, setGapFillCompany] = useState("");
   const [savingGapFill, setSavingGapFill] = useState(false);
 
-  const supabase = createClient();
+  const strongCount = themes.filter(t => t.score_tier === "strong").length;
+  const weakCount = themes.filter(t => t.score_tier === "weak").length;
+  const noneCount = themes.filter(t => t.score_tier === "none").length;
+  const gapsRemaining = weakCount + noneCount;
+
+  // Calculate current fit score from themes
+  const currentFitScore = Math.round(
+    themes.reduce((sum, t) => sum + t.score_numeric * t.theme_weight, 0) /
+    Math.max(themes.reduce((sum, t) => sum + t.theme_weight, 0), 1)
+  );
+
+  const progressPercent = themes.length > 0
+    ? Math.round((strongCount / themes.length) * 100)
+    : 0;
 
   async function handleGapFill(themeId: string) {
     if (!gapFillText.trim() || !user) return;
     setSavingGapFill(true);
 
     try {
-      // Save as a gap_fill profile entry
       const { data: entry, error: entryError } = await supabase
         .from("profile_entries")
         .insert({
@@ -73,7 +141,6 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack }: Props)
 
       if (entryError) throw entryError;
 
-      // Save as a chunk
       await supabase.from("profile_chunks").insert({
         user_id: user.id,
         entry_id: entry.id,
@@ -82,7 +149,6 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack }: Props)
         source: "gap_fill",
       });
 
-      // Re-score this theme via API
       const res = await fetch("/api/analyze", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -95,13 +161,21 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack }: Props)
 
       if (res.ok) {
         const updated = await res.json();
-        setThemes((prev) =>
-          prev.map((t) => (t.id === themeId ? { ...t, ...updated } : t))
+        const newThemes = themes.map((t) =>
+          t.id === themeId ? { ...t, ...updated } : t
         );
+        setThemes(newThemes);
+        // Recalculate fit score and propagate up
+        const newFit = Math.round(
+          newThemes.reduce((sum, t) => sum + t.score_numeric * t.theme_weight, 0) /
+          Math.max(newThemes.reduce((sum, t) => sum + t.theme_weight, 0), 1)
+        );
+        onUpdateAnalysis({ ...analysis, themes: newThemes, fit_score: newFit });
       }
 
       setGapFillText("");
       setGapFillCompany("");
+      setDisputeTheme(null);
       showSnackbar("Gap filled — theme rescored");
     } catch (err) {
       console.error("Gap fill failed:", err);
@@ -111,146 +185,169 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack }: Props)
     }
   }
 
-  const fitScoreColor =
-    analysis.fit_score >= 75
-      ? "text-accent"
-      : analysis.fit_score >= 50
-        ? "text-warning"
-        : "text-error";
-
   return (
-    <div className="mx-auto max-w-3xl">
-      <button
-        onClick={onBack}
-        className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft size={16} /> Back to JD
-      </button>
-
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {analysis.company_name} — {analysis.job_title}
-          </h1>
-          <p className="text-muted-foreground">Gap Analysis Results</p>
+    <div className="relative px-9 pb-[100px] pt-6">
+      {/* Progress bar */}
+      <div className="mb-6">
+        <div className="mb-1.5 flex items-center justify-between text-[11px]">
+          <span className="text-[var(--text-muted)]">{themes.length} themes analyzed</span>
+          <span className="text-[var(--text-muted)]">
+            <span className="text-[var(--accent)]">{strongCount} strong</span>
+            {" · "}
+            <span className="text-[var(--amber-text)]">{weakCount} partial</span>
+            {" · "}
+            <span>{noneCount} missing</span>
+          </span>
         </div>
-        <div className="text-right">
-          <div className={cn("text-3xl font-bold", fitScoreColor)}>
-            {analysis.fit_score}
-          </div>
-          <div className="text-sm text-muted-foreground">Fit Score</div>
+        <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-[rgba(0,0,0,0.08)]">
+          <div
+            className="h-full rounded-[3px] bg-[var(--accent)] transition-all duration-500"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
       </div>
 
-      {/* Fit score bar */}
-      <div className="mb-8 h-3 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-accent transition-all duration-500"
-          style={{ width: `${analysis.fit_score}%` }}
-        />
-      </div>
-
+      {/* Theme cards */}
       <div className="space-y-3">
         {themes.map((theme) => {
           const isExpanded = expandedTheme === theme.id;
-          const canFill = theme.score_tier !== "strong";
+          const isDisputing = disputeTheme === theme.id;
+          const status = getStatusText(theme.score_tier);
+          const bullets = theme.explanation
+            ? theme.explanation.split("\n").filter(b => b.trim())
+            : [];
 
           return (
-            <Card key={theme.id}>
+            <div
+              key={theme.id}
+              className={`overflow-hidden rounded-[12px] border border-[var(--border-subtle)] border-l-[3px] bg-[var(--bg-card)] ${getLeftBorderColor(theme.score_tier)}`}
+            >
+              {/* Card header */}
               <button
-                className="flex w-full items-center justify-between p-4 text-left"
-                onClick={() =>
-                  setExpandedTheme(isExpanded ? null : theme.id)
-                }
+                className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                onClick={() => setExpandedTheme(isExpanded ? null : theme.id)}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">
-                    {getScoreTierIcon(theme.score_tier)}
-                  </span>
-                  <div>
-                    <div className="font-medium">{theme.theme_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Weight: {Math.round(theme.theme_weight * 100)}%
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant={theme.score_tier}
+                <StatusIcon tier={theme.score_tier} />
+                <span className="flex-1 text-[13px] font-semibold text-[var(--text-primary)]">
+                  {theme.theme_name}
+                </span>
+                <span className={`text-[11px] font-medium ${status.className}`}>
+                  {status.label}
+                </span>
+                {theme.score_tier !== "strong" && (
+                  <Button
+                    variant="dispute"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDisputeTheme(isDisputing ? null : theme.id);
+                      if (!isExpanded) setExpandedTheme(theme.id);
+                    }}
                   >
-                    {theme.score_tier === "strong"
-                      ? "Strong"
-                      : theme.score_tier === "weak"
-                        ? "Weak"
-                        : "Missing"}
-                  </Badge>
-                  {isExpanded ? (
-                    <ChevronUp size={16} />
-                  ) : (
-                    <ChevronDown size={16} />
-                  )}
-                </div>
+                    Dispute
+                  </Button>
+                )}
+                <span className="ml-1 min-w-[28px] text-right text-[13px] font-bold text-[var(--text-primary)]">
+                  {theme.score_numeric}
+                </span>
+                {isExpanded ? (
+                  <ChevronUp size={14} className="text-[var(--text-faint)]" />
+                ) : (
+                  <ChevronDown size={14} className="text-[var(--text-faint)]" />
+                )}
               </button>
 
-              {isExpanded && (
-                <CardContent className="border-t border-border pt-4">
-                  <div className="mb-4 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {theme.explanation}
-                  </div>
+              {/* Score bar */}
+              <div className="mx-4">
+                <div className="h-[2px] w-full overflow-hidden rounded-full bg-[rgba(0,0,0,0.06)]">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${getScoreBarColor(theme.score_tier)}`}
+                    style={{ width: `${theme.score_numeric}%` }}
+                  />
+                </div>
+              </div>
 
-                  {canFill && (
-                    <div className="space-y-3 rounded-md border border-border bg-muted/50 p-4">
-                      <p className="text-sm font-medium">Fill this gap</p>
-                      <Input
-                        placeholder="Company or project name (optional)"
-                        value={gapFillCompany}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setGapFillCompany(e.target.value)
-                        }
-                      />
-                      <Textarea
-                        placeholder="Describe your relevant experience..."
-                        value={gapFillText}
-                        onChange={(e) => setGapFillText(e.target.value)}
-                        rows={3}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleGapFill(theme.id)}
-                        disabled={!gapFillText.trim() || savingGapFill}
-                      >
-                        {savingGapFill ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : null}
-                        Save & Rescore
-                      </Button>
+              {/* Expanded content */}
+              {isExpanded && (
+                <div className="px-4 pb-3 pt-3">
+                  {bullets.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {bullets.map((bullet, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-[#5A5045]">
+                          <span className={`mt-0.5 ${getArrowColor(theme.score_tier)}`}>&#8250;</span>
+                          <span>{bullet.replace(/^[-•·]\s*/, "")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Gap fill panel */}
+                  {isDisputing && (
+                    <div className="mt-3 rounded-lg border-t border-[rgba(0,0,0,0.06)] bg-[var(--bg-overlay)] p-4">
+                      <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                        Show your evidence
+                      </div>
+                      <div className="mb-3 text-[11px] text-[var(--text-muted)]">
+                        Tell the AI what it missed. This gets saved to your profile.
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Company or project name (optional)"
+                          value={gapFillCompany}
+                          onChange={(e) => setGapFillCompany(e.target.value)}
+                          className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                        />
+                        <Textarea
+                          placeholder="Describe your relevant experience..."
+                          value={gapFillText}
+                          onChange={(e) => setGapFillText(e.target.value)}
+                          rows={3}
+                          className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-[10px] text-[var(--text-faint)]">
+                          Saves to your profile permanently
+                        </span>
+                        <Button
+                          variant="save-rescore"
+                          onClick={() => handleGapFill(theme.id)}
+                          disabled={!gapFillText.trim() || savingGapFill}
+                        >
+                          {savingGapFill ? (
+                            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                          ) : null}
+                          Save & Rescore
+                        </Button>
+                      </div>
                     </div>
                   )}
-                </CardContent>
+                </div>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>
 
-      <div className="mt-8 flex justify-center">
-        <Button size="lg" onClick={onGenerate} disabled={generating}>
+      {/* Generate Resume FAB */}
+      <div className="absolute bottom-6 right-9 flex flex-col items-end gap-1">
+        <span className="text-[11px] text-[var(--text-muted)]">
+          Score: {currentFitScore} · {gapsRemaining} gap{gapsRemaining !== 1 ? "s" : ""} remaining
+        </span>
+        <Button
+          variant="fab"
+          onClick={onGenerate}
+          disabled={generating}
+        >
           {generating ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating Resume...
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Generating...
             </>
           ) : (
-            <>
-              <FileText className="mr-2 h-4 w-4" />
-              Generate Resume
-            </>
+            "Generate Resume"
           )}
         </Button>
       </div>
     </div>
   );
 }
-
-// Need to import Input for the gap fill form
-import { Input } from "@/components/ui/input";

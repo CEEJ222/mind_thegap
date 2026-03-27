@@ -30,19 +30,19 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-border bg-background transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
+        "flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-base)] transition-all duration-200",
+        collapsed ? "w-16" : "w-[215px]"
       )}
     >
       <div className="flex h-14 items-center justify-between px-4">
         {!collapsed && (
-          <Link href="/generate" className="text-lg font-semibold">
-            Mind <span className="text-accent">the Gap</span>
+          <Link href="/generate" className="text-lg font-semibold text-[var(--text-primary)]">
+            Mind <span className="text-[var(--accent)]">the Gap</span>
           </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="rounded-md p-1.5 hover:bg-muted"
+          className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-card)]"
         >
           {collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
         </button>
@@ -59,8 +59,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-[var(--accent)] text-[#0A5040] font-semibold"
+                  : "text-[var(--text-primary)] hover:bg-[var(--bg-card)]"
               )}
             >
               <item.icon size={18} />
@@ -70,10 +70,10 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-[var(--border-subtle)] p-2">
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
         >
           <LogOut size={18} />
           {!collapsed && <span>Sign Out</span>}
