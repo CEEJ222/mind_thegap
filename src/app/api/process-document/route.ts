@@ -36,18 +36,21 @@ function companyMatch(a: string, b: string): boolean {
   return false;
 }
 
-// Check if two date ranges overlap
+// Check if two date ranges overlap (with 6-month buffer for near-adjacent roles)
 function datesOverlap(a: EntryInfo, b: EntryInfo): boolean {
   // If either has no dates, can't determine overlap — treat as potential match
   if (!a.date_start && !b.date_start) return true;
   if (!a.date_start || !b.date_start) return true;
+
+  const SIX_MONTHS = 6 * 30 * 24 * 60 * 60 * 1000;
 
   const aStart = new Date(a.date_start).getTime();
   const aEnd = a.date_end ? new Date(a.date_end).getTime() : Date.now();
   const bStart = new Date(b.date_start).getTime();
   const bEnd = b.date_end ? new Date(b.date_end).getTime() : Date.now();
 
-  return aStart <= bEnd && bStart <= aEnd;
+  // Standard overlap check with 6-month buffer on each side
+  return (aStart - SIX_MONTHS) <= bEnd && (bStart - SIX_MONTHS) <= aEnd;
 }
 
 // Find the best matching existing entry for a new entry
@@ -61,29 +64,53 @@ function findMatch(newEntry: EntryInfo, existingEntries: EntryInfo[]): string | 
     return match?.id ?? null;
   }
 
-  // For jobs/projects/education: match on company name + overlapping dates
-  const candidates = existingEntries.filter(e =>
-    e.entry_type === newEntry.entry_type &&
-    companyMatch(e.company_name, newEntry.company_name) &&
-    datesOverlap(e, newEntry)
+  // Education: match on company (school) name only — don't worry about dates
+  if (newEntry.entry_type === "education") {
+    const match = existingEntries.find(e =>
+      e.entry_type === "education" &&
+      companyMatch(e.company_name, newEntry.company_name)
+    );
+    return match?.id ?? null;
+  }
+
+  // For jobs and projects: match on company name + overlapping dates
+  // Allow cross-type matching (job can match project at same company if dates overlap)
+  const sameCompany = existingEntries.filter(e =>
+    (e.entry_type === "job" || e.entry_type === "project") &&
+    (newEntry.entry_type === "job" || newEntry.entry_type === "project") &&
+    companyMatch(e.company_name, newEntry.company_name)
   );
 
-  if (candidates.length === 0) return null;
+  if (sameCompany.length === 0) return null;
 
-  // If only one candidate, it's the match
-  if (candidates.length === 1) return candidates[0].id ?? null;
+  // Check for date overlap among same-company entries
+  const overlapping = sameCompany.filter(e => datesOverlap(e, newEntry));
 
-  // Multiple candidates (e.g. two roles at same company with overlapping dates)
-  // Try to narrow by title similarity
-  const titleMatch = candidates.find(e => {
-    const nt = normalize(newEntry.job_title);
+  if (overlapping.length === 0) return null;
+
+  // If there are overlapping entries, pick the best one:
+  // 1. Prefer exact title match
+  // 2. Prefer title keyword match
+  // 3. Fall back to the one with the most date overlap
+  const nt = normalize(newEntry.job_title);
+
+  // Exact normalized title match
+  const exactTitle = overlapping.find(e => normalize(e.job_title) === nt);
+  if (exactTitle) return exactTitle.id ?? null;
+
+  // Keyword match (share a significant word like "director", "manager", "product")
+  const keywordMatch = overlapping.find(e => {
     const et = normalize(e.job_title);
     if (!nt || !et) return false;
-    return nt.includes(et) || et.includes(nt) ||
-      nt.split(" ").some(w => w.length > 3 && et.includes(w));
+    const newWords = nt.split(" ").filter(w => w.length > 3);
+    const existWords = et.split(" ").filter(w => w.length > 3);
+    return newWords.some(w => existWords.includes(w));
   });
+  if (keywordMatch) return keywordMatch.id ?? null;
 
-  return titleMatch?.id ?? candidates[0].id ?? null;
+  // No title match — just pick the first overlapping entry at this company
+  // This handles cases like "Senior PM → Director" matching either role
+  return overlapping[0].id ?? null;
 }
 
 export async function POST(request: NextRequest) {
