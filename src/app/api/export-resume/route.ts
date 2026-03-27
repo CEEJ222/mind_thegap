@@ -154,11 +154,20 @@ export async function POST(request: NextRequest) {
     // Try getting resume content from the database first (most reliable)
     let markdownContent = "";
 
-    const { data: resumeRecord } = await supabase
+    const { data: resumeRecord, error: dbError } = await supabase
       .from("generated_resumes")
       .select("editorial_notes")
       .eq("file_path", file_path)
       .single();
+
+    console.log("Export DB lookup:", {
+      file_path,
+      found: !!resumeRecord,
+      dbError: dbError?.message,
+      hasContent: !!resumeRecord?.editorial_notes?.resume_content,
+      notesType: typeof resumeRecord?.editorial_notes,
+      notesKeys: resumeRecord?.editorial_notes ? Object.keys(resumeRecord.editorial_notes) : [],
+    });
 
     if (resumeRecord?.editorial_notes?.resume_content) {
       markdownContent = resumeRecord.editorial_notes.resume_content;
