@@ -93,6 +93,15 @@ export async function POST(request: NextRequest) {
 
     const lengthSetting = (settings?.resume_length as string) ?? "1_page";
     const includeSummary = settings?.include_summary ?? true;
+    const fullName = (settings?.full_name as string) || "";
+    const linkedinUrl = (settings?.linkedin_url as string) || "";
+    const contactEmail = (settings?.email as string) || "";
+    const phone = (settings?.phone as string) || "";
+    const location = (settings?.location as string) || "";
+
+    // Build contact header line
+    const contactParts = [fullName, linkedinUrl, contactEmail, phone, location].filter(Boolean);
+    const contactHeader = contactParts.join(" | ");
 
     const text = await chatCompletion({
       model: MODELS.REASONING,
@@ -100,6 +109,9 @@ export async function POST(request: NextRequest) {
         {
           role: "user",
           content: `You are an expert resume writer. Generate a tailored resume for this job application.
+
+## Contact Header (MUST be the first line of the resume exactly as written)
+${contactHeader || "Name | Contact Info"}
 
 ## Job Description
 ${application.jd_text}
@@ -115,12 +127,13 @@ ${profileData}
 - Include summary section: ${includeSummary ? "yes" : "no"}
 
 ## Instructions
-1. Structure the resume optimally for this role (decide whether to lead with skills, summary, or experience).
-2. Emphasize bullets that directly match JD themes — surface them earlier.
-3. Enforce the length setting: shorten older roles, remove irrelevant jobs, trim weaker bullets.
-4. Full-time roles first (chronological), then contract/temporary roles labeled and grouped.
-5. Omit jobs that are too old and irrelevant entirely.
-6. Track your editorial decisions.
+1. The FIRST LINE of the resume MUST be the contact header exactly as provided above — name, LinkedIn, email, phone, location separated by pipes.
+2. Structure the resume optimally for this role (decide whether to lead with skills, summary, or experience).
+3. Emphasize bullets that directly match JD themes — surface them earlier.
+4. Enforce the length setting: shorten older roles, remove irrelevant jobs, trim weaker bullets.
+5. Full-time roles first (chronological), then contract/temporary roles labeled and grouped.
+6. Omit jobs that are too old and irrelevant entirely.
+7. Track your editorial decisions.
 
 Respond in this exact JSON format:
 {

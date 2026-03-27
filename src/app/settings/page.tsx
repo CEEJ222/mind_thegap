@@ -4,15 +4,22 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { showSnackbar } from "@/components/ui/snackbar";
 
 interface Settings {
   id: string;
+  full_name: string;
+  linkedin_url: string;
+  email: string;
+  phone: string;
+  location: string;
   output_format: string;
   include_summary: boolean;
   resume_length: string;
   theme: string;
+  [key: string]: string | boolean;
 }
 
 export default function SettingsPage() {
@@ -27,7 +34,6 @@ export default function SettingsPage() {
       setLoading(false);
       return;
     }
-    // Fallback: load settings directly if auth context hasn't loaded them yet
     if (user) {
       supabase
         .from("user_settings")
@@ -63,6 +69,13 @@ export default function SettingsPage() {
     showSnackbar("Setting updated");
   }
 
+  // Debounced save for text inputs
+  function handleTextBlur(key: string, value: string) {
+    if (localSettings && value !== (localSettings[key] || "")) {
+      updateSetting(key, value);
+    }
+  }
+
   if (loading || !localSettings) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -75,11 +88,73 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-2 text-2xl font-bold">Settings</h1>
       <p className="mb-8 text-muted-foreground">
-        Configure your resume generation preferences. These settings apply to
-        all generated resumes.
+        Configure your contact info and resume generation preferences.
       </p>
 
       <div className="space-y-6">
+        {/* Contact Info */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Contact Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Full Name</label>
+              <Input
+                value={localSettings.full_name || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, full_name: e.target.value })}
+                onBlur={(e) => handleTextBlur("full_name", e.target.value)}
+                placeholder="C.J. Britz"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Email</label>
+              <Input
+                type="email"
+                value={localSettings.email || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, email: e.target.value })}
+                onBlur={(e) => handleTextBlur("email", e.target.value)}
+                placeholder="you@example.com"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Phone</label>
+              <Input
+                type="tel"
+                value={localSettings.phone || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, phone: e.target.value })}
+                onBlur={(e) => handleTextBlur("phone", e.target.value)}
+                placeholder="805-428-7721"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">LinkedIn URL</label>
+              <Input
+                type="url"
+                value={localSettings.linkedin_url || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, linkedin_url: e.target.value })}
+                onBlur={(e) => handleTextBlur("linkedin_url", e.target.value)}
+                placeholder="https://linkedin.com/in/cjbritz"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Location</label>
+              <Input
+                value={localSettings.location || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, location: e.target.value })}
+                onBlur={(e) => handleTextBlur("location", e.target.value)}
+                placeholder="Los Angeles, CA"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Resume Preferences */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Output Format</CardTitle>
