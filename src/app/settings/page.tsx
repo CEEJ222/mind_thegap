@@ -1,29 +1,60 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { showSnackbar } from "@/components/ui/snackbar";
-import type { OutputFormat, ResumeLength, ThemeMode } from "@/lib/types/database";
+
+interface Settings {
+  id: string;
+  output_format: string;
+  include_summary: boolean;
+  resume_length: string;
+  theme: string;
+}
 
 export default function SettingsPage() {
-  const { settings, refreshSettings } = useAuth();
+  const { user, settings, refreshSettings } = useAuth();
   const supabase = createClient();
+  const [localSettings, setLocalSettings] = useState<Settings | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (settings) {
+      setLocalSettings(settings as Settings);
+      setLoading(false);
+      return;
+    }
+    // Fallback: load settings directly if auth context hasn't loaded them yet
+    if (user) {
+      supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data }: { data: Settings | null }) => {
+          if (data) setLocalSettings(data as Settings);
+          setLoading(false);
+        });
+    }
+  }, [user, settings, supabase]);
 
   async function updateSetting(key: string, value: string | boolean) {
-    if (!settings) return;
+    if (!localSettings) return;
     const { error } = await supabase
       .from("user_settings")
       .update({ [key]: value })
-      .eq("id", settings.id);
+      .eq("id", localSettings.id);
 
     if (error) {
       showSnackbar("Failed to save setting", "error");
       return;
     }
 
-    // Apply theme change to document
+    setLocalSettings({ ...localSettings, [key]: value });
+
     if (key === "theme") {
       document.documentElement.classList.toggle("dark", value === "dark");
     }
@@ -32,7 +63,7 @@ export default function SettingsPage() {
     showSnackbar("Setting updated");
   }
 
-  if (!settings) {
+  if (loading || !localSettings) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -55,10 +86,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Select
-              value={settings.output_format}
-              onChange={(e) =>
-                updateSetting("output_format", e.target.value as OutputFormat)
-              }
+              value={localSettings.output_format}
+              onChange={(e) => updateSetting("output_format", e.target.value)}
             >
               <option value="pdf">PDF</option>
               <option value="docx">Word Document (DOCX)</option>
@@ -72,7 +101,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Select
-              value={settings.include_summary ? "yes" : "no"}
+              value={localSettings.include_summary ? "yes" : "no"}
               onChange={(e) =>
                 updateSetting("include_summary", e.target.value === "yes")
               }
@@ -89,10 +118,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Select
-              value={settings.resume_length}
-              onChange={(e) =>
-                updateSetting("resume_length", e.target.value as ResumeLength)
-              }
+              value={localSettings.resume_length}
+              onChange={(e) => updateSetting("resume_length", e.target.value)}
             >
               <option value="1_page">Max 1 page</option>
               <option value="1_5_pages">Max 1.5 pages</option>
@@ -108,10 +135,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Select
-              value={settings.theme}
-              onChange={(e) =>
-                updateSetting("theme", e.target.value as ThemeMode)
-              }
+              value={localSettings.theme}
+              onChange={(e) => updateSetting("theme", e.target.value)}
             >
               <option value="light">Light Mode</option>
               <option value="dark">Dark Mode</option>

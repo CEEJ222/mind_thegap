@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -50,15 +50,14 @@ export default function GeneratePage() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [resume, setResume] = useState<ResumeResult | null>(null);
 
+  useEffect(() => {
+    if (!hasProfile) {
+      router.push("/profile");
+    }
+  }, [hasProfile, router]);
+
   if (!hasProfile) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24">
-        <p className="mb-4 text-muted-foreground">
-          Add at least one entry to your profile to start generating resumes.
-        </p>
-        <Button onClick={() => router.push("/profile")}>Go to Profile</Button>
-      </div>
-    );
+    return null;
   }
 
   async function handleAnalyze() {

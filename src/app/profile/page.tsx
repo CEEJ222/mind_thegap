@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { UploadDocuments } from "@/components/profile/upload-documents";
 import { AddLink } from "@/components/profile/add-link";
@@ -15,20 +15,20 @@ import {
   Link as LinkIcon,
   PenLine,
   CheckCircle2,
-  Circle,
+  FileText,
+  Globe,
+  Pen,
 } from "lucide-react";
-import type { Database } from "@/lib/types/database";
-
-type ProfileEntry = Database["public"]["Tables"]["profile_entries"]["Row"];
-type UploadedDoc = Database["public"]["Tables"]["uploaded_documents"]["Row"];
-type ScrapedUrl = Database["public"]["Tables"]["scraped_urls"]["Row"];
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const supabase = createClient();
-  const [entries, setEntries] = useState<ProfileEntry[]>([]);
-  const [documents, setDocuments] = useState<UploadedDoc[]>([]);
-  const [urls, setUrls] = useState<ScrapedUrl[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [entries, setEntries] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [documents, setDocuments] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [urls, setUrls] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState<
     "upload" | "link" | "manual" | null
   >(null);
@@ -66,7 +66,7 @@ export default function ProfilePage() {
 
   const hasDocuments = documents.length > 0;
   const hasLinks = urls.length > 0;
-  const hasManualEntries = entries.some((e) => e.source === "manual_entry");
+  const hasManualEntries = entries.some((e: { source: string }) => e.source === "manual_entry");
   const isNewUser = entries.length === 0 && documents.length === 0 && urls.length === 0;
 
   if (loading) {
@@ -86,79 +86,84 @@ export default function ProfilePage() {
           : "Manage your career profile data. Everything you add here is used to generate tailored resumes."}
       </p>
 
-      {/* Onboarding checklist for new users */}
-      {isNewUser && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-lg">Getting Started</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              {
-                done: hasDocuments,
-                label: "Upload a resume or document",
-                action: () => setActiveSection("upload"),
-              },
-              {
-                done: hasLinks,
-                label: "Add a link",
-                action: () => setActiveSection("link"),
-              },
-              {
-                done: hasManualEntries,
-                label: "Add a manual entry",
-                action: () => setActiveSection("manual"),
-              },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={item.action}
-                className="flex w-full items-center gap-3 rounded-md p-3 text-left hover:bg-muted"
-              >
-                {item.done ? (
-                  <CheckCircle2 className="h-5 w-5 text-accent" />
-                ) : (
-                  <Circle className="h-5 w-5 text-muted-foreground" />
-                )}
-                <span className={item.done ? "text-muted-foreground line-through" : ""}>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
+      {/* Onboarding for new users — card grid */}
+      {isNewUser && !activeSection && (
+        <div className="mb-10 grid gap-4 md:grid-cols-3">
+          {[
+            {
+              key: "upload" as const,
+              icon: FileText,
+              title: "Upload a Document",
+              description: "Resume, project write-up, performance review, or certification",
+              done: hasDocuments,
+            },
+            {
+              key: "link" as const,
+              icon: Globe,
+              title: "Add a Link",
+              description: "Personal website, portfolio, or project URL",
+              done: hasLinks,
+            },
+            {
+              key: "manual" as const,
+              icon: Pen,
+              title: "Add Manually",
+              description: "Type in a job, project, education, or award directly",
+              done: hasManualEntries,
+            },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setActiveSection(item.key)}
+              className="group relative flex flex-col items-center rounded-lg border-2 border-dashed border-border bg-card p-8 text-center transition-all hover:border-accent hover:shadow-md"
+            >
+              {item.done && (
+                <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-accent" />
+              )}
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 transition-colors group-hover:bg-accent/20">
+                <item.icon className="h-7 w-7 text-accent" />
+              </div>
+              <h3 className="mb-1 font-semibold">{item.title}</h3>
+              <p className="text-sm text-muted-foreground">
+                {item.description}
+              </p>
+            </button>
+          ))}
+        </div>
       )}
 
-      {/* Action buttons */}
-      <div className="mb-8 flex flex-wrap gap-3">
-        <Button
-          variant={activeSection === "upload" ? "default" : "outline"}
-          onClick={() =>
-            setActiveSection(activeSection === "upload" ? null : "upload")
-          }
-        >
-          <Upload className="mr-2 h-4 w-4" />
-          Upload Document
-        </Button>
-        <Button
-          variant={activeSection === "link" ? "default" : "outline"}
-          onClick={() =>
-            setActiveSection(activeSection === "link" ? null : "link")
-          }
-        >
-          <LinkIcon className="mr-2 h-4 w-4" />
-          Add Link
-        </Button>
-        <Button
-          variant={activeSection === "manual" ? "default" : "outline"}
-          onClick={() =>
-            setActiveSection(activeSection === "manual" ? null : "manual")
-          }
-        >
-          <PenLine className="mr-2 h-4 w-4" />
-          Add Entry
-        </Button>
-      </div>
+      {/* Action buttons for returning users */}
+      {!isNewUser && (
+        <div className="mb-8 flex flex-wrap gap-3">
+          <Button
+            variant={activeSection === "upload" ? "default" : "outline"}
+            onClick={() =>
+              setActiveSection(activeSection === "upload" ? null : "upload")
+            }
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Upload Document
+          </Button>
+          <Button
+            variant={activeSection === "link" ? "default" : "outline"}
+            onClick={() =>
+              setActiveSection(activeSection === "link" ? null : "link")
+            }
+          >
+            <LinkIcon className="mr-2 h-4 w-4" />
+            Add Link
+          </Button>
+          <Button
+            variant={activeSection === "manual" ? "default" : "outline"}
+            onClick={() =>
+              setActiveSection(activeSection === "manual" ? null : "manual")
+            }
+          >
+            <PenLine className="mr-2 h-4 w-4" />
+            Add Entry
+          </Button>
+        </div>
+      )}
 
       {/* Active input section */}
       {activeSection === "upload" && (
