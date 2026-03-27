@@ -170,8 +170,14 @@ export async function POST(request: NextRequest) {
       hasContent: !!resumeRecord?.editorial_notes?.resume_content,
     });
 
-    if (resumeRecord?.editorial_notes?.resume_content) {
-      markdownContent = resumeRecord.editorial_notes.resume_content;
+    // editorial_notes may come back as a string or object
+    let notes = resumeRecord?.editorial_notes;
+    if (typeof notes === "string") {
+      try { notes = JSON.parse(notes); } catch { notes = null; }
+    }
+
+    if (notes?.resume_content) {
+      markdownContent = notes.resume_content;
     } else {
       // Fallback: try downloading from storage
       const { data: fileData, error } = await supabase.storage
