@@ -169,7 +169,7 @@ export function MergeEntries({ entries, chunks, onComplete, onCancel }: Props) {
       </p>
 
       <div className="max-h-[400px] space-y-2 overflow-y-auto">
-        {entries.filter((e: { entry_type: string }) => e.entry_type !== "skills" && e.entry_type !== "certification").map((entry: { id: string; company_name: string; job_title: string; date_start: string | null; date_end: string | null; entry_type: string }) => {
+        {entries.filter((e: { entry_type: string }) => e.entry_type === "job" || e.entry_type === "project").map((entry: { id: string; company_name: string; job_title: string; date_start: string | null; date_end: string | null; entry_type: string }) => {
           const isSelected = selectedIds.includes(entry.id);
           const entryChunks = getChunksForEntry(entry.id);
 
@@ -190,6 +190,9 @@ export function MergeEntries({ entries, chunks, onComplete, onCancel }: Props) {
                   </span>
                   <span className="ml-2 text-sm text-[var(--text-muted)]">
                     {entry.job_title}
+                  </span>
+                  <span className="ml-2 rounded-full bg-[var(--bg-overlay)] px-2 py-0.5 text-[10px] capitalize text-[var(--text-faint)]">
+                    {entry.entry_type}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
