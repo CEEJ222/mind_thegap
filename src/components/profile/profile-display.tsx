@@ -33,6 +33,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [editChunks, setEditChunks] = useState<{ id: string; text: string }[]>([]);
+  const [removedChunkIds, setRemovedChunkIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
@@ -63,6 +64,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
       .map((c: any) => ({ id: c.id, text: c.chunk_text }));
 
     setEditingId(entry.id);
+    setRemovedChunkIds([]);
     setEditData({
       company_name: entry.company_name ?? "",
       job_title: entry.job_title ?? "",
@@ -90,6 +92,11 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     if (error) {
       showSnackbar("Failed to save changes", "error");
       return;
+    }
+
+    // Delete removed chunks
+    for (const chunkId of removedChunkIds) {
+      await supabase.from("profile_chunks").delete().eq("id", chunkId);
     }
 
     // Update each chunk
@@ -121,6 +128,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     setEditingId(null);
     setEditData({});
     setEditChunks([]);
+    setRemovedChunkIds([]);
     showSnackbar("Entry updated");
     onUpdate();
   }
@@ -176,6 +184,11 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   }
 
   function removeChunk(index: number) {
+    const chunk = editChunks[index];
+    // Track removal of existing chunks (not new ones)
+    if (chunk && !chunk.id.startsWith("new-")) {
+      setRemovedChunkIds((prev) => [...prev, chunk.id]);
+    }
     setEditChunks((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -304,6 +317,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                           setEditingId(null);
                           setEditData({});
                           setEditChunks([]);
+                          setRemovedChunkIds([]);
                         }}
                       >
                         <X className="mr-1 h-3 w-3" /> Cancel
