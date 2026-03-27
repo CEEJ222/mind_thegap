@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -206,11 +205,10 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     const isConfirmingDelete = deletingId === entry.id;
 
     return (
-      <Card key={entry.id} className="mb-3 border-[var(--border-subtle)] bg-[var(--bg-card)]">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <Icon className="mt-1 h-5 w-5 text-[var(--text-muted)]" />
+      <div key={entry.id} className="mb-5 pb-5 border-b border-[var(--border-subtle)] last:border-b-0">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3 flex-1">
+            <Icon className="mt-1 h-5 w-5 text-[var(--text-muted)]" />
               <div className="flex-1">
                 {isEditing ? (
                   <div className="space-y-3">
@@ -400,9 +398,8 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                 )}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -439,8 +436,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
 
           // Multiple entries at same company — LinkedIn-style grouping
           return (
-            <Card key={group.company} className="mb-3 border-[var(--border-subtle)] bg-[var(--bg-card)]">
-              <CardContent className="p-4">
+            <div key={group.company} className="mb-5 pb-5 border-b border-[var(--border-subtle)] last:border-b-0">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-3">
                     <Icon className="h-5 w-5 text-[var(--text-muted)]" />
@@ -487,8 +483,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {group.entries.map((entry: any) => renderRole(entry))}
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           );
         })}
       </div>
