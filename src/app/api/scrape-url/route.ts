@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,12 +16,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
+    // Get the scraped_urls record ID
+    const { data: urlRecord } = await supabase
+      .from("scraped_urls")
+      .select("id")
+      .eq("url", url)
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
     await supabase
       .from("scraped_urls")
       .update({ processing_status: "processing" })
       .eq("url", url)
       .eq("user_id", user_id);
 
+    // Step 1: Scrape the URL content
     let scrapedContent = "";
 
     if (process.env.FIRECRAWL_API_KEY) {
@@ -46,7 +56,7 @@ export async function POST(request: NextRequest) {
       try {
         const res = await fetch(url);
         scrapedContent = await res.text();
-        scrapedContent = scrapedContent.replace(/<[^>]*>/g, " ").slice(0, 10000);
+        scrapedContent = scrapedContent.replace(/<[^>]*>/g, " ").slice(0, 15000);
       } catch {
         await supabase
           .from("scraped_urls")
@@ -63,84 +73,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Save scraped content
     await supabase
       .from("scraped_urls")
       .update({ scraped_content: scrapedContent })
       .eq("url", url)
       .eq("user_id", user_id);
 
-    const aiResponse = await chatCompletion({
-      model: MODELS.EXTRACTION,
-      messages: [
-        {
-          role: "user",
-          content: `Extract career profile data from this scraped web content.
+    // Step 2: Create an uploaded_documents record so it's trackable
+    const { data: docRecord } = await supabase
+      .from("uploaded_documents")
+      .insert({
+        user_id,
+        file_name: `Link: ${url}`,
+        file_path: `scraped/${user_id}/${Date.now()}`,
+        file_type: "text/html",
+        document_type: "other",
+        processing_status: "processing",
+      })
+      .select("id")
+      .single();
 
-## URL: ${url}
-## Content:
-${scrapedContent.slice(0, 8000)}
+    // Step 3: Route through the document processor pipeline (same fuzzy dedup)
+    const origin = request.headers.get("origin") || request.headers.get("host") || "http://localhost:3000";
+    const baseUrl = origin.startsWith("http") ? origin : `http://${origin}`;
 
-Extract any jobs, projects, education, awards, or certifications mentioned.
-Respond in JSON format:
-{
-  "entries": [
-    {
-      "entry_type": "job|project|education|award|certification",
-      "company_name": "string or null",
-      "job_title": "string or null",
-      "date_start": "YYYY-MM-DD or null",
-      "date_end": "YYYY-MM-DD or null",
-      "industry": "string or null",
-      "domain": "string or null",
-      "chunks": ["description 1", "description 2"]
-    }
-  ]
-}
-
-If no career data is found, return {"entries": []}.
-Return ONLY valid JSON.`,
-        },
-      ],
+    const processRes = await fetch(`${baseUrl}/api/process-document`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id,
+        pasted_text: scrapedContent.slice(0, 10000),
+        document_id: docRecord?.id,
+      }),
     });
 
-    const parsed = JSON.parse(aiResponse);
-
-    for (const entry of parsed.entries) {
-      const { data: newEntry } = await supabase
-        .from("profile_entries")
-        .insert({
-          user_id,
-          entry_type: entry.entry_type,
-          company_name: entry.company_name,
-          job_title: entry.job_title,
-          date_start: entry.date_start,
-          date_end: entry.date_end,
-          industry: entry.industry,
-          domain: entry.domain,
-          source: "url_scrape",
-        })
-        .select()
-        .single();
-
-      if (!newEntry) continue;
-
-      for (const chunkText of entry.chunks) {
-        await supabase.from("profile_chunks").insert({
-          user_id,
-          entry_id: newEntry.id,
-          chunk_text: chunkText,
-          company_name: entry.company_name,
-          job_title: entry.job_title,
-          date_start: entry.date_start,
-          date_end: entry.date_end,
-          industry: entry.industry,
-          domain: entry.domain,
-          entry_type: entry.entry_type,
-          source: "url_scrape",
-        });
-      }
+    if (!processRes.ok) {
+      throw new Error("Document processing failed");
     }
 
+    // Mark URL as completed
     await supabase
       .from("scraped_urls")
       .update({ processing_status: "completed" })
@@ -149,7 +121,6 @@ Return ONLY valid JSON.`,
 
     return NextResponse.json({
       success: true,
-      entries_found: parsed.entries.length,
     });
   } catch (err) {
     console.error("Scrape error:", err);

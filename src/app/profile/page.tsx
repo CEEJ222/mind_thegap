@@ -10,6 +10,7 @@ import { UploadDocuments } from "@/components/profile/upload-documents";
 import { AddLink } from "@/components/profile/add-link";
 import { ManualEntry } from "@/components/profile/manual-entry";
 import { PasteAndParse } from "@/components/profile/paste-and-parse";
+import { MergeEntries } from "@/components/profile/merge-entries";
 import { ProfileDisplay } from "@/components/profile/profile-display";
 import { DocumentsList } from "@/components/profile/documents-list";
 import {
@@ -17,6 +18,7 @@ import {
   Link as LinkIcon,
   PenLine,
   ClipboardPaste,
+  Merge,
   CheckCircle2,
   FileText,
   Globe,
@@ -35,7 +37,7 @@ export default function ProfilePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [urls, setUrls] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState<
-    "upload" | "link" | "manual" | "paste" | null
+    "upload" | "link" | "manual" | "paste" | "merge" | null
   >(null);
   const [loading, setLoading] = useState(true);
 
@@ -189,6 +191,17 @@ export default function ProfilePage() {
             <ClipboardPaste className="mr-2 h-4 w-4" />
             Paste & Parse
           </Button>
+          {entries.length >= 2 && (
+            <Button
+              variant={activeSection === "merge" ? "default" : "outline"}
+              onClick={() =>
+                setActiveSection(activeSection === "merge" ? null : "merge")
+              }
+            >
+              <Merge className="mr-2 h-4 w-4" />
+              Merge Entries
+            </Button>
+          )}
         </div>
       )}
 
@@ -240,6 +253,22 @@ export default function ProfilePage() {
                 loadData();
                 setActiveSection(null);
               }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {activeSection === "merge" && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <MergeEntries
+              entries={entries}
+              chunks={chunks}
+              onComplete={() => {
+                loadData();
+                setActiveSection(null);
+              }}
+              onCancel={() => setActiveSection(null)}
             />
           </CardContent>
         </Card>
