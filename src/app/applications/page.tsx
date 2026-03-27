@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Trash2 } from "lucide-react";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -18,6 +19,7 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadApplications = useCallback(async () => {
     if (!user) return;
@@ -39,6 +41,13 @@ export default function ApplicationsPage() {
       .from("applications")
       .update({ interview_converted: status })
       .eq("id", appId);
+    loadApplications();
+  }
+
+  async function handleDelete(appId: string) {
+    // Themes and resumes cascade via FK
+    await supabase.from("applications").delete().eq("id", appId);
+    setDeletingId(null);
     loadApplications();
   }
 
@@ -83,7 +92,7 @@ export default function ApplicationsPage() {
             <div className="col-span-2">Date</div>
             <div className="col-span-2 text-center">Fit Score</div>
             <div className="col-span-2 text-center">Status</div>
-            <div className="col-span-2 text-center">Resume</div>
+            <div className="col-span-2 text-center">Actions</div>
           </div>
 
           {applications.map((app) => (
@@ -137,8 +146,37 @@ export default function ApplicationsPage() {
                     <option value="no">Rejected</option>
                   </Select>
                 </div>
-                <div className="col-span-2 text-center text-sm text-accent">
-                  View
+                <div
+                  className="col-span-2 flex items-center justify-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {deletingId === app.id ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDelete(app.id)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDeletingId(null)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setDeletingId(app.id)}
+                      className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>
