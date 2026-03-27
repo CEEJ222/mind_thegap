@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 interface TopNavProps {
   companyName?: string;
@@ -8,11 +11,39 @@ interface TopNavProps {
   fitScore?: number | null;
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return (name[0] || "?").toUpperCase();
+}
+
 export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const { user } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const supabase = createClient();
+
+  // Load avatar URL once
+  if (user && !loaded) {
+    setLoaded(true);
+    supabase
+      .from("users")
+      .select("avatar_url")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.avatar_url) setAvatarUrl(data.avatar_url);
+      });
+  }
+
+  const fullName = user?.user_metadata?.full_name || user?.email || "User";
+  const initials = getInitials(fullName);
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-base)] px-9">
+    <header className="flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 md:px-9">
       <div>
         {companyName && (
           <>
@@ -25,10 +56,10 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
           </>
         )}
       </div>
-      <div className="relative">
+      <div className="flex items-center gap-3">
         {fitScore !== undefined && fitScore !== null && (
           <div
-            className="cursor-default"
+            className="relative cursor-default"
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
           >
@@ -47,6 +78,25 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
             )}
           </div>
         )}
+        <Link href="/profile">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt="Profile"
+              className="h-9 w-9 rounded-full object-cover border border-[var(--border-subtle)]"
+            />
+          ) : (
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white"
+              style={{
+                background: "linear-gradient(135deg, #F6D365 0%, #FDA085 40%, #A18CD1 70%, #5FC3E4 100%)",
+              }}
+            >
+              {initials}
+            </div>
+          )}
+        </Link>
       </div>
     </header>
   );
