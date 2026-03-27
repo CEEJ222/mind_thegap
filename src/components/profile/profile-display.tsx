@@ -347,72 +347,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                         {formatDate(entry.date_end)}
                       </p>
                     )}
-                    {/* Company/project description */}
-                    {entry.company_description && (
-                      <p className="mt-1.5 text-xs italic text-[var(--text-muted)]">
-                        {entry.company_description}
-                      </p>
-                    )}
-                    {/* Bullet points from chunks */}
-                    {(() => {
-                      const entryChunks = chunks.filter(
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (c: any) => c.entry_id === entry.id
-                      );
-                      if (entryChunks.length > 0) {
-                        return (
-                          <ul className="mt-2 space-y-1">
-                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                            {entryChunks.map((chunk: any) => (
-                              <li
-                                key={chunk.id}
-                                className="flex items-start gap-2 text-sm text-[var(--text-primary)]"
-                              >
-                                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-[var(--text-muted)]" />
-                                <span>{chunk.chunk_text}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        );
-                      }
-                      if (entry.description) {
-                        return (
-                          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-primary)]">
-                            {entry.description}
-                          </p>
-                        );
-                      }
-                      return null;
-                    })()}
-                    {/* Inline URL input */}
-                    {linkingId === entry.id && (
-                      <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
-                        <Input
-                          type="url"
-                          value={linkUrl}
-                          onChange={(e) => setLinkUrl(e.target.value)}
-                          placeholder="https://www.example.com"
-                          className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleAddLink(entry.id);
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddLink(entry.id)}
-                          disabled={!linkUrl.trim() || linkLoading}
-                          className="h-8 px-3 text-xs"
-                        >
-                          {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
-                        </Button>
-                        <button
-                          onClick={() => { setLinkingId(null); setLinkUrl(""); }}
-                          className="text-[var(--text-faint)] hover:text-[var(--text-primary)]"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    )}
+                    {renderChunks(entry)}
                   </>
                 )}
               </div>
@@ -465,6 +400,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
               </div>
             )}
           </div>
+          {renderLinkInput(entry)}
         </CardContent>
       </Card>
     );
@@ -553,12 +489,13 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                     {formatDate(entry.date_start)} — {formatDate(entry.date_end)}
                   </p>
                 )}
-                {renderChunksAndLink(entry)}
+                {renderChunks(entry)}
               </>
             )}
           </div>
           {!isEditing && renderActions(entry, isConfirmingDelete)}
         </div>
+        {renderLinkInput(entry)}
       </div>
     );
   }
@@ -645,9 +582,9 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     );
   }
 
-  // Extract chunks, description, and link input rendering
+  // Render chunks and description (no link input)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function renderChunksAndLink(entry: any) {
+  function renderChunks(entry: any) {
     const entryChunks = chunks.filter(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (c: any) => c.entry_id === entry.id
@@ -673,25 +610,32 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
         {!entryChunks.length && entry.description && (
           <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-primary)]">{entry.description}</p>
         )}
-        {linkingId === entry.id && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
-            <Input
-              type="url"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://www.example.com"
-              className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
-              onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(entry.id); }}
-            />
-            <Button size="sm" onClick={() => handleAddLink(entry.id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
-              {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
-            </Button>
-            <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
-              <X size={14} />
-            </button>
-          </div>
-        )}
       </>
+    );
+  }
+
+  // Render inline link input
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderLinkInput(entry: any) {
+    if (linkingId !== entry.id) return null;
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
+        <Input
+          type="url"
+          value={linkUrl}
+          onChange={(e) => setLinkUrl(e.target.value)}
+          placeholder="https://www.example.com"
+          className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
+          onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(entry.id); }}
+          autoFocus
+        />
+        <Button size="sm" onClick={() => handleAddLink(entry.id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
+          {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
+        </Button>
+        <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
+          <X size={14} />
+        </button>
+      </div>
     );
   }
 

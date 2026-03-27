@@ -98,17 +98,41 @@ Return ONLY valid JSON.`,
 
     const enrichment = JSON.parse(response);
 
-    // Update entry metadata and description
-    const updates: Record<string, string> = {};
-    if (enrichment.company_description) updates.company_description = enrichment.company_description;
-    if (enrichment.industry && !entry.industry) updates.industry = enrichment.industry;
-    if (enrichment.domain && !entry.domain) updates.domain = enrichment.domain;
+    // Update ALL entries at this company (not just the one clicked)
+    const companyName = entry.company_name;
+    const { data: allCompanyEntries } = await supabase
+      .from("profile_entries")
+      .select("id, company_name, industry, domain, company_description")
+      .eq("user_id", entry.user_id);
 
-    if (Object.keys(updates).length > 0) {
-      await supabase
-        .from("profile_entries")
-        .update(updates)
-        .eq("id", entry_id);
+    const normalizedCompany = (companyName || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+    let updatedCount = 0;
+
+    for (const e of (allCompanyEntries ?? [])) {
+      const normalizedEntry = (e.company_name || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+      const isMatch =
+        normalizedEntry === normalizedCompany ||
+        normalizedEntry.includes(normalizedCompany) ||
+        normalizedCompany.includes(normalizedEntry) ||
+        (normalizedEntry.split(" ")[0]?.length > 2 &&
+          normalizedEntry.split(" ")[0] === normalizedCompany.split(" ")[0]);
+
+      if (isMatch) {
+        const updates: Record<string, string> = {};
+        if (enrichment.company_description && !e.company_description) {
+          updates.company_description = enrichment.company_description;
+        }
+        if (enrichment.industry && !e.industry) updates.industry = enrichment.industry;
+        if (enrichment.domain && !e.domain) updates.domain = enrichment.domain;
+
+        if (Object.keys(updates).length > 0) {
+          await supabase
+            .from("profile_entries")
+            .update(updates)
+            .eq("id", e.id);
+          updatedCount++;
+        }
+      }
     }
 
     return NextResponse.json({
@@ -116,6 +140,7 @@ Return ONLY valid JSON.`,
       company_description: enrichment.company_description,
       industry: enrichment.industry,
       domain: enrichment.domain,
+      entries_updated: updatedCount,
     });
   } catch (err) {
     console.error("Enrich entry error:", err);
