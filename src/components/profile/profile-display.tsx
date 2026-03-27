@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
-import { Pencil, Check, X, Trash2, Plus, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
+import { Pencil, Check, X, Trash2, Plus, Link as LinkIcon, Loader2, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +34,9 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [editChunks, setEditChunks] = useState<{ id: string; text: string }[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
 
   if (entries.length === 0) {
     return (
@@ -134,6 +137,34 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     setDeletingId(null);
     showSnackbar("Entry deleted");
     onUpdate();
+  }
+
+  async function handleAddLink(entryId: string) {
+    if (!linkUrl.trim()) return;
+    setLinkLoading(true);
+
+    try {
+      const res = await fetch("/api/enrich-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entry_id: entryId,
+          url: linkUrl.trim(),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Enrichment failed");
+
+      setLinkingId(null);
+      setLinkUrl("");
+      showSnackbar("URL scraped — entry enriched");
+      onUpdate();
+    } catch (err) {
+      console.error("Link failed:", err);
+      showSnackbar("Failed to enrich entry", "error");
+    } finally {
+      setLinkLoading(false);
+    }
   }
 
   function updateChunkText(index: number, text: string) {
@@ -318,12 +349,51 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                       }
                       return null;
                     })()}
+                    {/* Inline URL input */}
+                    {linkingId === entry.id && (
+                      <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
+                        <Input
+                          type="url"
+                          value={linkUrl}
+                          onChange={(e) => setLinkUrl(e.target.value)}
+                          placeholder="https://www.example.com"
+                          className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleAddLink(entry.id);
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddLink(entry.id)}
+                          disabled={!linkUrl.trim() || linkLoading}
+                          className="h-8 px-3 text-xs"
+                        >
+                          {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
+                        </Button>
+                        <button
+                          onClick={() => { setLinkingId(null); setLinkUrl(""); }}
+                          className="text-[var(--text-faint)] hover:text-[var(--text-primary)]"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
             </div>
             {!isEditing && (
               <div className="ml-2 flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setLinkingId(linkingId === entry.id ? null : entry.id);
+                    setLinkUrl("");
+                  }}
+                  className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
+                  title="Add URL"
+                >
+                  <LinkIcon size={14} />
+                </button>
                 <button
                   onClick={() => startEditing(entry)}
                   className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
