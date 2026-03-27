@@ -127,23 +127,58 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
     setSavingGapFill(true);
 
     try {
-      const { data: entry, error: entryError } = await supabase
-        .from("profile_entries")
-        .insert({
-          user_id: user.id,
-          entry_type: "job",
-          company_name: gapFillCompany || null,
-          description: gapFillText,
-          source: "gap_fill",
-        })
-        .select()
-        .single();
+      let entryId: string;
 
-      if (entryError) throw entryError;
+      // Try to find an existing entry at this company
+      if (gapFillCompany) {
+        const { data: existing } = await supabase
+          .from("profile_entries")
+          .select("id, company_name")
+          .eq("user_id", user.id);
+
+        const normalizedNew = gapFillCompany.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+        const match = (existing ?? []).find((e: { company_name: string | null }) => {
+          const n = (e.company_name || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+          return n === normalizedNew || n.includes(normalizedNew) || normalizedNew.includes(n) ||
+            (n.split(" ")[0]?.length > 2 && n.split(" ")[0] === normalizedNew.split(" ")[0]);
+        });
+
+        if (match) {
+          entryId = match.id;
+        } else {
+          const { data: newEntry, error: entryError } = await supabase
+            .from("profile_entries")
+            .insert({
+              user_id: user.id,
+              entry_type: "job",
+              company_name: gapFillCompany,
+              source: "gap_fill",
+            })
+            .select("id")
+            .single();
+          if (entryError) throw entryError;
+          entryId = newEntry.id;
+        }
+      } else {
+        // No company specified — create a standalone entry
+        const { data: newEntry, error: entryError } = await supabase
+          .from("profile_entries")
+          .insert({
+            user_id: user.id,
+            entry_type: "job",
+            company_name: null,
+            description: gapFillText,
+            source: "gap_fill",
+          })
+          .select("id")
+          .single();
+        if (entryError) throw entryError;
+        entryId = newEntry.id;
+      }
 
       await supabase.from("profile_chunks").insert({
         user_id: user.id,
-        entry_id: entry.id,
+        entry_id: entryId,
         chunk_text: gapFillText,
         company_name: gapFillCompany || null,
         source: "gap_fill",
