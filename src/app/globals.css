@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --bg-base: #DDD0BC;
-    --bg-card: #EDE5D8;
+    --bg-base: #F5EDDC;
+    --bg-card: #FAF4EB;
     --bg-overlay: rgba(0,0,0,0.04);
     --text-primary: #1C1C1E;
     --text-muted: #8C7E6A;
     --text-faint: #B0A898;
-    --border-subtle: rgba(0,0,0,0.08);
-    --border-input: rgba(0,0,0,0.12);
+    --border-subtle: #DBC8CB;
+    --border-input: #DBC8CB;
     --accent: #3DD9B3;
     --accent-dark: #2AB89A;
     --accent-deep: #0D6B58;
