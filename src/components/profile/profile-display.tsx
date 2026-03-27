@@ -347,6 +347,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                         {formatDate(entry.date_end)}
                       </p>
                     )}
+                    {renderLinkInput(entry)}
                     {renderChunks(entry)}
                   </>
                 )}
@@ -400,7 +401,6 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
               </div>
             )}
           </div>
-          {renderLinkInput(entry)}
         </CardContent>
       </Card>
     );
@@ -441,15 +441,48 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
           return (
             <Card key={group.company} className="mb-3 border-[var(--border-subtle)] bg-[var(--bg-card)]">
               <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <Icon className="h-5 w-5 text-[var(--text-muted)]" />
-                  <h4 className="font-semibold text-[var(--text-primary)]">{group.company}</h4>
-                  {group.entries[0].company_description && (
-                    <span className="text-xs italic text-[var(--text-muted)]">
-                      — {group.entries[0].company_description}
-                    </span>
-                  )}
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-3">
+                    <Icon className="h-5 w-5 text-[var(--text-muted)]" />
+                    <h4 className="font-semibold text-[var(--text-primary)]">{group.company}</h4>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setLinkingId(linkingId === `company-${group.company}` ? null : `company-${group.company}`);
+                      setLinkUrl("");
+                    }}
+                    className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
+                    title="Add company URL"
+                  >
+                    <LinkIcon size={14} />
+                  </button>
                 </div>
+                {/* Company link input */}
+                {linkingId === `company-${group.company}` && (
+                  <div className="mb-2 ml-8 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
+                    <Input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      placeholder="https://www.example.com"
+                      className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(group.entries[0].id); }}
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={() => handleAddLink(group.entries[0].id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
+                      {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
+                    </Button>
+                    <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                {/* Company description */}
+                {group.entries[0].company_description && (
+                  <p className="mb-3 ml-8 text-xs italic text-[var(--text-muted)]">
+                    {group.entries[0].company_description}
+                  </p>
+                )}
                 <div className="ml-8 space-y-4 border-l-2 border-[var(--border-subtle)] pl-4">
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {group.entries.map((entry: any) => renderRole(entry))}
@@ -493,9 +526,36 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
               </>
             )}
           </div>
-          {!isEditing && renderActions(entry, isConfirmingDelete)}
+          {!isEditing && renderRoleActions(entry, isConfirmingDelete)}
         </div>
-        {renderLinkInput(entry)}
+      </div>
+    );
+  }
+
+  // Actions for roles within a grouped company (no link icon — that's at company level)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderRoleActions(entry: any, isConfirmingDelete: boolean) {
+    return (
+      <div className="ml-2 flex items-center gap-1">
+        <button
+          onClick={() => startEditing(entry)}
+          className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+        >
+          <Pencil size={14} />
+        </button>
+        {isConfirmingDelete ? (
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="destructive" onClick={() => handleDelete(entry.id)} className="h-7 px-2 text-xs">Delete</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setDeletingId(entry.id)}
+            className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--red-muted)]"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
     );
   }
