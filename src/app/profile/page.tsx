@@ -99,7 +99,7 @@ export default function ProfilePage() {
 
       {/* Onboarding for new users — card grid */}
       {isNewUser && !activeSection && (
-        <div className="mb-10 grid gap-4 md:grid-cols-3">
+        <div className="mb-10 grid gap-4 md:grid-cols-4">
           {[
             {
               key: "upload" as const,
@@ -121,6 +121,13 @@ export default function ProfilePage() {
               title: "Add Manually",
               description: "Type in a job, project, education, or award directly",
               done: hasManualEntries,
+            },
+            {
+              key: "paste" as const,
+              icon: ClipboardPaste,
+              title: "Paste & Parse",
+              description: "Paste any document and AI will extract the structured data",
+              done: false,
             },
           ].map((item) => (
             <button
