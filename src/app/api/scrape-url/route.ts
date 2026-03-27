@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,14 +17,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Update status
     await supabase
       .from("scraped_urls")
       .update({ processing_status: "processing" })
       .eq("url", url)
       .eq("user_id", user_id);
 
-    // Use Firecrawl if available, otherwise fall back to basic fetch
     let scrapedContent = "";
 
     if (process.env.FIRECRAWL_API_KEY) {
@@ -50,7 +46,6 @@ export async function POST(request: NextRequest) {
       try {
         const res = await fetch(url);
         scrapedContent = await res.text();
-        // Strip HTML tags for basic parsing
         scrapedContent = scrapedContent.replace(/<[^>]*>/g, " ").slice(0, 10000);
       } catch {
         await supabase
@@ -68,17 +63,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save scraped content
     await supabase
       .from("scraped_urls")
       .update({ scraped_content: scrapedContent })
       .eq("url", url)
       .eq("user_id", user_id);
 
-    // Use Claude to extract profile data from scraped content
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+    const aiResponse = await chatCompletion({
+      model: MODELS.EXTRACTION,
       messages: [
         {
           role: "user",
@@ -111,12 +103,8 @@ Return ONLY valid JSON.`,
       ],
     });
 
-    const content = message.content[0];
-    if (content.type !== "text") throw new Error("Unexpected response");
+    const parsed = JSON.parse(aiResponse);
 
-    const parsed = JSON.parse(content.text);
-
-    // Insert entries and chunks
     for (const entry of parsed.entries) {
       const { data: newEntry } = await supabase
         .from("profile_entries")
@@ -153,7 +141,6 @@ Return ONLY valid JSON.`,
       }
     }
 
-    // Mark as completed
     await supabase
       .from("scraped_urls")
       .update({ processing_status: "completed" })

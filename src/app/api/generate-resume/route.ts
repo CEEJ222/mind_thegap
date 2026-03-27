@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +17,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Load all needed data in parallel
     const [appRes, settingsRes, chunksRes, themesRes, existingRes] =
       await Promise.all([
         supabase
@@ -63,14 +60,14 @@ export async function POST(request: NextRequest) {
 
     const profileData = chunks
       .map(
-        (c) =>
+        (c: Record<string, string | null>) =>
           `[${c.entry_type} | ${c.company_name || "Unknown"} | ${c.job_title || "Unknown"} | ${c.date_start ?? "?"} - ${c.date_end ?? "Present"}]\n${c.chunk_text}`
       )
       .join("\n\n");
 
     const themesSummary = themes
       .map(
-        (t) =>
+        (t: Record<string, string | number | null>) =>
           `${t.theme_name} (${t.score_tier}, weight: ${t.theme_weight}): ${t.explanation}`
       )
       .join("\n");
@@ -82,12 +79,11 @@ export async function POST(request: NextRequest) {
       no_max: "no length restriction",
     };
 
-    const lengthSetting = settings?.resume_length ?? "1_page";
+    const lengthSetting = (settings?.resume_length as string) ?? "1_page";
     const includeSummary = settings?.include_summary ?? true;
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+    const text = await chatCompletion({
+      model: MODELS.REASONING,
       messages: [
         {
           role: "user",
@@ -129,18 +125,9 @@ Return ONLY valid JSON, no markdown fences.`,
       ],
     });
 
-    const content = message.content[0];
-    if (content.type !== "text") {
-      return NextResponse.json(
-        { error: "Unexpected response" },
-        { status: 500 }
-      );
-    }
+    const result = JSON.parse(text);
 
-    const result = JSON.parse(content.text);
-
-    // Store resume content as a file in storage
-    const format = settings?.output_format ?? "pdf";
+    const format = (settings?.output_format as string) ?? "pdf";
     const filePath = `${user_id}/${application_id}_v${nextVersion}.md`;
 
     await supabase.storage
@@ -149,7 +136,6 @@ Return ONLY valid JSON, no markdown fences.`,
         upsert: true,
       });
 
-    // Save resume record
     const { data: resume } = await supabase
       .from("generated_resumes")
       .insert({

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +17,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Get user's profile chunks for context
     const { data: chunks } = await supabase
       .from("profile_chunks")
       .select("*")
@@ -32,10 +29,8 @@ export async function POST(request: NextRequest) {
       )
       .join("\n");
 
-    // Ask Claude to analyze the JD and produce gap analysis
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+    const text = await chatCompletion({
+      model: MODELS.REASONING,
       messages: [
         {
           role: "user",
@@ -80,17 +75,8 @@ Return ONLY valid JSON, no markdown fences.`,
       ],
     });
 
-    const content = message.content[0];
-    if (content.type !== "text") {
-      return NextResponse.json(
-        { error: "Unexpected response format" },
-        { status: 500 }
-      );
-    }
+    const analysis = JSON.parse(text);
 
-    const analysis = JSON.parse(content.text);
-
-    // Save application
     const { data: application, error: appError } = await supabase
       .from("applications")
       .insert({
@@ -105,7 +91,6 @@ Return ONLY valid JSON, no markdown fences.`,
 
     if (appError) throw appError;
 
-    // Save themes
     const themesToInsert = analysis.themes.map(
       (t: {
         theme_name: string;
@@ -144,7 +129,6 @@ Return ONLY valid JSON, no markdown fences.`,
   }
 }
 
-// PATCH: Rescore a single theme after gap fill
 export async function PATCH(request: NextRequest) {
   try {
     const patchBody = await request.json();
@@ -154,7 +138,6 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Get the theme
     const { data: theme } = await supabase
       .from("application_themes")
       .select("*")
@@ -165,14 +148,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Theme not found" }, { status: 404 });
     }
 
-    // Get the application JD
     const { data: app } = await supabase
       .from("applications")
       .select("jd_text")
       .eq("id", application_id)
       .single();
 
-    // Get updated profile chunks
     const { data: patchChunks } = await supabase
       .from("profile_chunks")
       .select("*")
@@ -185,8 +166,8 @@ export async function PATCH(request: NextRequest) {
       )
       .join("\n");
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+    const text = await chatCompletion({
+      model: MODELS.LIGHT,
       max_tokens: 1024,
       messages: [
         {
@@ -210,15 +191,7 @@ Respond with JSON only:
       ],
     });
 
-    const content = message.content[0];
-    if (content.type !== "text") {
-      return NextResponse.json(
-        { error: "Unexpected response" },
-        { status: 500 }
-      );
-    }
-
-    const updated = JSON.parse(content.text);
+    const updated = JSON.parse(text);
 
     await supabase
       .from("application_themes")

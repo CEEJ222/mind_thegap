@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,13 +18,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Update status to processing
     await supabase
       .from("uploaded_documents")
       .update({ processing_status: "processing" })
       .eq("file_path", file_path);
 
-    // Download file from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
       .download(file_path);
@@ -45,13 +41,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert to text (for text/plain files; PDF/DOCX would need additional parsing)
     const text = await fileData.text();
 
-    // Use Claude to extract structured profile data
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+    const aiResponse = await chatCompletion({
+      model: MODELS.EXTRACTION,
       messages: [
         {
           role: "user",
@@ -89,20 +82,14 @@ Return ONLY valid JSON.`,
       ],
     });
 
-    const content = message.content[0];
-    if (content.type !== "text") throw new Error("Unexpected response");
+    const parsed = JSON.parse(aiResponse);
 
-    const parsed = JSON.parse(content.text);
-
-    // Update document type
     await supabase
       .from("uploaded_documents")
       .update({ document_type: parsed.document_type })
       .eq("file_path", file_path);
 
-    // Insert entries and chunks
     for (const entry of parsed.entries) {
-      // Check for deduplication: same company + overlapping dates
       const { data: existing } = await supabase
         .from("profile_entries")
         .select("*")
@@ -111,16 +98,14 @@ Return ONLY valid JSON.`,
         .eq("user_confirmed", false);
 
       let entryId: string;
-      const hasOverlap = existing?.some((e) => {
+      const hasOverlap = existing?.some((e: Record<string, string | null>) => {
         if (!e.date_start || !entry.date_start) return false;
         return e.company_name === entry.company_name;
       });
 
       if (hasOverlap && existing && existing.length > 0) {
-        // Merge into existing entry
         entryId = existing[0].id;
       } else {
-        // Create new entry
         const { data: newEntry } = await supabase
           .from("profile_entries")
           .insert({
@@ -141,16 +126,14 @@ Return ONLY valid JSON.`,
         entryId = newEntry.id;
       }
 
-      // Insert chunks (with basic dedup check)
       for (const chunkText of entry.chunks) {
         const { data: existingChunks } = await supabase
           .from("profile_chunks")
           .select("chunk_text")
           .eq("entry_id", entryId);
 
-        // Simple text similarity check - skip exact duplicates
         const isDuplicate = existingChunks?.some(
-          (ec) =>
+          (ec: Record<string, string>) =>
             ec.chunk_text.toLowerCase().trim() ===
             chunkText.toLowerCase().trim()
         );
@@ -173,7 +156,6 @@ Return ONLY valid JSON.`,
       }
     }
 
-    // Mark as completed
     await supabase
       .from("uploaded_documents")
       .update({ processing_status: "completed" })
