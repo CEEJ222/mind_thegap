@@ -51,9 +51,21 @@ export async function POST(request: NextRequest) {
     const themes = themesRes.data ?? [];
     const nextVersion = ((existingRes.data?.[0]?.version ?? 0) as number) + 1;
 
+    console.log("Generate resume debug:", {
+      application_id,
+      user_id,
+      appFound: !!application,
+      appError: appRes.error?.message,
+      appDataLength: appRes.data?.length,
+      settingsFound: !!settings,
+      settingsError: settingsRes.error?.message,
+      chunksCount: chunks.length,
+      themesCount: themes.length,
+    });
+
     if (!application) {
       return NextResponse.json(
-        { error: "Application not found" },
+        { error: "Application not found", debug: { appError: appRes.error?.message, appDataLength: appRes.data?.length } },
         { status: 404 }
       );
     }
