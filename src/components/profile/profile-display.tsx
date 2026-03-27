@@ -14,6 +14,8 @@ import { Pencil, Check, X, Trash2, Briefcase, GraduationCap, Award, FolderOpen }
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   entries: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  chunks: any[];
   onUpdate: () => void;
 }
 
@@ -25,7 +27,7 @@ const typeIcons: Record<string, typeof Briefcase> = {
   certification: Award,
 };
 
-export function ProfileDisplay({ entries, onUpdate }: Props) {
+export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   const supabase = createClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,11 +166,37 @@ export function ProfileDisplay({ entries, onUpdate }: Props) {
                       {formatDate(entry.date_start)} —{" "}
                       {formatDate(entry.date_end)}
                     </p>
-                    {entry.description && (
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-primary)]">
-                        {entry.description}
-                      </p>
-                    )}
+                    {/* Bullet points from chunks */}
+                    {(() => {
+                      const entryChunks = chunks.filter(
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (c: any) => c.entry_id === entry.id
+                      );
+                      if (entryChunks.length > 0) {
+                        return (
+                          <ul className="mt-2 space-y-1">
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {entryChunks.map((chunk: any) => (
+                              <li
+                                key={chunk.id}
+                                className="flex items-start gap-2 text-sm text-[var(--text-primary)]"
+                              >
+                                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-[var(--text-muted)]" />
+                                <span>{chunk.chunk_text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      }
+                      if (entry.description) {
+                        return (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-primary)]">
+                            {entry.description}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </>
                 )}
               </div>

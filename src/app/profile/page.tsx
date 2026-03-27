@@ -27,6 +27,8 @@ export default function ProfilePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [entries, setEntries] = useState<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [chunks, setChunks] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [documents, setDocuments] = useState<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [urls, setUrls] = useState<any[]>([]);
@@ -37,12 +39,16 @@ export default function ProfilePage() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [entriesRes, docsRes, urlsRes] = await Promise.all([
+    const [entriesRes, chunksRes, docsRes, urlsRes] = await Promise.all([
       supabase
         .from("profile_entries")
         .select("*")
         .eq("user_id", user.id)
         .order("date_start", { ascending: false }),
+      supabase
+        .from("profile_chunks")
+        .select("*")
+        .eq("user_id", user.id),
       supabase
         .from("uploaded_documents")
         .select("*")
@@ -56,6 +62,7 @@ export default function ProfilePage() {
     ]);
 
     if (entriesRes.data) setEntries(entriesRes.data);
+    if (chunksRes.data) setChunks(chunksRes.data);
     if (docsRes.data) setDocuments(docsRes.data);
     if (urlsRes.data) setUrls(urlsRes.data);
     setLoading(false);
@@ -212,7 +219,7 @@ export default function ProfilePage() {
       <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
 
       {/* Profile display */}
-      <ProfileDisplay entries={entries} onUpdate={loadData} />
+      <ProfileDisplay entries={entries} chunks={chunks} onUpdate={loadData} />
     </div>
   );
 }
