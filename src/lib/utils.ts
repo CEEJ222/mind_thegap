@@ -7,7 +7,10 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: string | null): string {
   if (!date) return "Present";
-  return new Date(date).toLocaleDateString("en-US", {
+  // Parse as local date to avoid timezone shift (YYYY-MM-DD → midnight local, not UTC)
+  const [year, month] = date.split("-").map(Number);
+  const d = new Date(year, month - 1, 1);
+  return d.toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
   });
