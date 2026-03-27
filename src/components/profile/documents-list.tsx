@@ -78,11 +78,7 @@ export function DocumentsList({ documents, urls, onUpdate }: Props) {
   if (documents.length === 0 && urls.length === 0) return null;
 
   return (
-    <div className="mb-8">
-      <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-        Uploaded Files & Links
-      </h2>
-
+    <div>
       <div className="space-y-2">
         {/* Documents */}
         {documents.map((doc) => (

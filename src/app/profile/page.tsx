@@ -255,55 +255,53 @@ export default function ProfilePage() {
           {/* Right column — Files & Links (top on mobile, right on desktop) */}
           <div className="w-full md:w-[300px] md:flex-shrink-0 overflow-hidden">
             <div className="md:sticky md:top-6 md:max-h-[calc(100vh-120px)] md:overflow-y-auto">
-              {/* Add actions dropdown */}
-              <div className="relative mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setAddMenuOpen(!addMenuOpen)}
-                  className="w-full justify-between"
-                >
-                  <span className="flex items-center gap-2">
-                    <Plus size={14} />
-                    Add to Profile
-                  </span>
-                  <ChevronDown size={14} className={`transition-transform ${addMenuOpen ? "rotate-180" : ""}`} />
-                </Button>
-                {addMenuOpen && (
-                  <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] py-1 shadow-lg">
+              {/* Documents & URLs list with + button */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Uploaded Files & Links</h2>
+                  <div className="relative">
                     <button
-                      onClick={() => openSection("upload")}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                      onClick={() => setAddMenuOpen(!addMenuOpen)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)] transition-colors shadow-sm"
                     >
-                      <Upload size={14} className="text-[var(--text-muted)]" />
-                      Upload Document
+                      <Plus size={16} />
                     </button>
-                    <button
-                      onClick={() => openSection("link")}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
-                    >
-                      <LinkIcon size={14} className="text-[var(--text-muted)]" />
-                      Add Link
-                    </button>
-                    <button
-                      onClick={() => openSection("paste")}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
-                    >
-                      <ClipboardPaste size={14} className="text-[var(--text-muted)]" />
-                      Paste & Parse
-                    </button>
-                    <button
-                      onClick={() => openSection("manual")}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
-                    >
-                      <PenLine size={14} className="text-[var(--text-muted)]" />
-                      Add Entry Manually
-                    </button>
+                    {addMenuOpen && (
+                      <div className="absolute top-full right-0 z-10 mt-2 w-52 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] py-1 shadow-lg">
+                        <button
+                          onClick={() => openSection("upload")}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                        >
+                          <Upload size={14} className="text-[var(--text-muted)]" />
+                          Upload Document
+                        </button>
+                        <button
+                          onClick={() => openSection("link")}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                        >
+                          <LinkIcon size={14} className="text-[var(--text-muted)]" />
+                          Add Link
+                        </button>
+                        <button
+                          onClick={() => openSection("paste")}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                        >
+                          <ClipboardPaste size={14} className="text-[var(--text-muted)]" />
+                          Paste & Parse
+                        </button>
+                        <button
+                          onClick={() => openSection("manual")}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                        >
+                          <PenLine size={14} className="text-[var(--text-muted)]" />
+                          Add Entry Manually
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+                <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
               </div>
-
-              {/* Documents & URLs list */}
-              <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
             </div>
           </div>
         </div>
