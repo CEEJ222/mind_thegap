@@ -127,14 +127,21 @@ Return ONLY valid JSON.`,
       .eq("file_path", file_path);
 
     for (const entry of parsed.entries) {
-      // Dedup: check for existing entry with same company_name AND job_title
-      const { data: existing } = await supabase
+      // Dedup: check for existing entry
+      // For skills/certifications: match on company_name only (job_title varies)
+      // For everything else: match on company_name + job_title
+      let dedupQuery = supabase
         .from("profile_entries")
         .select("*")
         .eq("user_id", user_id)
         .eq("company_name", entry.company_name)
-        .eq("job_title", entry.job_title)
         .eq("user_confirmed", false);
+
+      if (entry.entry_type !== "certification") {
+        dedupQuery = dedupQuery.eq("job_title", entry.job_title);
+      }
+
+      const { data: existing } = await dedupQuery;
 
       let entryId: string;
 
