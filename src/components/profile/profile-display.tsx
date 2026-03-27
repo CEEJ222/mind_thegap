@@ -5,11 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
-import { Pencil, Check, X, Trash2, Briefcase, GraduationCap, Award, FolderOpen } from "lucide-react";
+import { Pencil, Check, X, Trash2, Plus, Briefcase, GraduationCap, Award, FolderOpen } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,6 +31,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const [editChunks, setEditChunks] = useState<{ id: string; text: string }[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   if (entries.length === 0) {
@@ -42,32 +42,83 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     );
   }
 
-  const jobs = entries.filter((e) => e.entry_type === "job");
-  const projects = entries.filter((e) => e.entry_type === "project");
-  const education = entries.filter((e) => e.entry_type === "education");
+  const jobs = entries.filter((e: { entry_type: string }) => e.entry_type === "job");
+  const projects = entries.filter((e: { entry_type: string }) => e.entry_type === "project");
+  const education = entries.filter((e: { entry_type: string }) => e.entry_type === "education");
   const awards = entries.filter(
-    (e) => e.entry_type === "award" || e.entry_type === "certification"
+    (e: { entry_type: string }) => e.entry_type === "award" || e.entry_type === "certification"
   );
 
-  async function handleSaveEdit(id: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function startEditing(entry: any) {
+    const entryChunks = chunks
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((c: any) => c.entry_id === entry.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((c: any) => ({ id: c.id, text: c.chunk_text }));
+
+    setEditingId(entry.id);
+    setEditData({
+      company_name: entry.company_name ?? "",
+      job_title: entry.job_title ?? "",
+      date_start: entry.date_start ?? "",
+      date_end: entry.date_end ?? "",
+    });
+    setEditChunks(entryChunks);
+  }
+
+  async function handleSaveEdit(entryId: string) {
+    // Update the entry fields
     const { error } = await supabase
       .from("profile_entries")
-      .update({ ...editData, user_confirmed: true })
-      .eq("id", id);
+      .update({
+        company_name: editData.company_name || null,
+        job_title: editData.job_title || null,
+        date_start: editData.date_start || null,
+        date_end: editData.date_end || null,
+        user_confirmed: true,
+      })
+      .eq("id", entryId);
 
     if (error) {
       showSnackbar("Failed to save changes", "error");
       return;
     }
 
+    // Update each chunk
+    for (const chunk of editChunks) {
+      if (chunk.id.startsWith("new-")) {
+        // New chunk — insert
+        if (chunk.text.trim()) {
+          await supabase.from("profile_chunks").insert({
+            user_id: entries.find((e: { id: string }) => e.id === entryId)?.user_id,
+            entry_id: entryId,
+            chunk_text: chunk.text.trim(),
+            source: "manual_entry",
+          });
+        }
+      } else {
+        // Existing chunk — update
+        if (chunk.text.trim()) {
+          await supabase
+            .from("profile_chunks")
+            .update({ chunk_text: chunk.text.trim(), user_confirmed: true })
+            .eq("id", chunk.id);
+        } else {
+          // Empty text — delete the chunk
+          await supabase.from("profile_chunks").delete().eq("id", chunk.id);
+        }
+      }
+    }
+
     setEditingId(null);
     setEditData({});
-    showSnackbar("Profile entry updated");
+    setEditChunks([]);
+    showSnackbar("Entry updated");
     onUpdate();
   }
 
   async function handleDelete(id: string) {
-    // Chunks cascade via FK, so just delete the entry
     const { error } = await supabase
       .from("profile_entries")
       .delete()
@@ -83,14 +134,21 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     onUpdate();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function startEditing(entry: any) {
-    setEditingId(entry.id);
-    setEditData({
-      company_name: entry.company_name,
-      job_title: entry.job_title,
-      description: entry.description,
-    });
+  function updateChunkText(index: number, text: string) {
+    setEditChunks((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, text } : c))
+    );
+  }
+
+  function removeChunk(index: number) {
+    setEditChunks((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addChunk() {
+    setEditChunks((prev) => [
+      ...prev,
+      { id: `new-${Date.now()}`, text: "" },
+    ]);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,39 +165,98 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
               <Icon className="mt-1 h-5 w-5 text-[var(--text-muted)]" />
               <div className="flex-1">
                 {isEditing ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={editData.company_name ?? ""}
-                      onChange={(e) =>
-                        setEditData({ ...editData, company_name: e.target.value })
-                      }
-                      placeholder="Company"
-                      className="border-[var(--border-input)] bg-[var(--bg-card)]"
-                    />
-                    <Input
-                      value={editData.job_title ?? ""}
-                      onChange={(e) =>
-                        setEditData({ ...editData, job_title: e.target.value })
-                      }
-                      placeholder="Title"
-                      className="border-[var(--border-input)] bg-[var(--bg-card)]"
-                    />
-                    <Textarea
-                      value={editData.description ?? ""}
-                      onChange={(e) =>
-                        setEditData({ ...editData, description: e.target.value })
-                      }
-                      rows={3}
-                      className="border-[var(--border-input)] bg-[var(--bg-card)]"
-                    />
-                    <div className="flex gap-2">
+                  <div className="space-y-3">
+                    {/* Company & Title */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={editData.company_name}
+                        onChange={(e) =>
+                          setEditData({ ...editData, company_name: e.target.value })
+                        }
+                        placeholder="Company"
+                        className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                      />
+                      <Input
+                        value={editData.job_title}
+                        onChange={(e) =>
+                          setEditData({ ...editData, job_title: e.target.value })
+                        }
+                        placeholder="Title"
+                        className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                      />
+                    </div>
+
+                    {/* Dates */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] text-[var(--text-muted)]">Start Date</label>
+                        <Input
+                          type="date"
+                          value={editData.date_start}
+                          onChange={(e) =>
+                            setEditData({ ...editData, date_start: e.target.value })
+                          }
+                          className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] text-[var(--text-muted)]">End Date (blank = present)</label>
+                        <Input
+                          type="date"
+                          value={editData.date_end}
+                          onChange={(e) =>
+                            setEditData({ ...editData, date_end: e.target.value })
+                          }
+                          className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bullets */}
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-[var(--text-muted)]">
+                        Bullet Points
+                      </label>
+                      <div className="space-y-1.5">
+                        {editChunks.map((chunk, i) => (
+                          <div key={chunk.id} className="flex items-start gap-1.5">
+                            <span className="mt-2.5 text-[var(--text-faint)]">•</span>
+                            <Input
+                              value={chunk.text}
+                              onChange={(e) => updateChunkText(i, e.target.value)}
+                              placeholder="Achievement or responsibility..."
+                              className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                            />
+                            <button
+                              onClick={() => removeChunk(i)}
+                              className="mt-2 text-[var(--text-faint)] hover:text-[var(--red-muted)]"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={addChunk}
+                        className="mt-2 flex items-center gap-1 text-xs text-[var(--accent)] hover:text-[var(--accent-dark)]"
+                      >
+                        <Plus size={12} /> Add bullet
+                      </button>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-1">
                       <Button size="sm" onClick={() => handleSaveEdit(entry.id)}>
                         <Check className="mr-1 h-3 w-3" /> Save
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setEditingId(null)}
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditData({});
+                          setEditChunks([]);
+                        }}
                       >
                         <X className="mr-1 h-3 w-3" /> Cancel
                       </Button>
@@ -162,10 +279,12 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                         {entry.job_title}
                       </p>
                     )}
-                    <p className="text-xs text-[var(--text-faint)]">
-                      {formatDate(entry.date_start)} —{" "}
-                      {formatDate(entry.date_end)}
-                    </p>
+                    {(entry.date_start || entry.date_end) && (
+                      <p className="text-xs text-[var(--text-faint)]">
+                        {formatDate(entry.date_start)} —{" "}
+                        {formatDate(entry.date_end)}
+                      </p>
+                    )}
                     {/* Bullet points from chunks */}
                     {(() => {
                       const entryChunks = chunks.filter(
