@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "./sidebar";
 import { TopNav } from "./top-nav";
@@ -29,13 +29,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const [topNavData, setTopNavData] = useState<TopNavData>({});
 
-  function setTopNav(data: TopNavData) {
+  const setTopNav = useCallback((data: TopNavData) => {
     setTopNavData(data);
-  }
+  }, []);
 
-  function clearTopNav() {
+  const clearTopNav = useCallback(() => {
     setTopNavData({});
-  }
+  }, []);
 
   if (loading) {
     return (
