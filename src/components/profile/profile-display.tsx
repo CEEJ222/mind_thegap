@@ -470,8 +470,268 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     );
   }
 
+  // Group entries by company name
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function renderSection(title: string, items: any[]) {
+  function groupByCompany(items: any[]): { company: string; entries: any[] }[] {
+    const groups: Record<string, { company: string; entries: typeof items }> = {};
+    for (const item of items) {
+      const key = (item.company_name || "Other").toLowerCase().trim();
+      if (!groups[key]) {
+        groups[key] = { company: item.company_name || "Other", entries: [] };
+      }
+      groups[key].entries.push(item);
+    }
+    return Object.values(groups);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderGroupedSection(title: string, items: any[]) {
+    if (items.length === 0) return null;
+    const groups = groupByCompany(items);
+
+    return (
+      <div className="mb-8">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+        {groups.map((group) => {
+          const Icon = typeIcons[group.entries[0].entry_type] || Briefcase;
+          const hasMultiple = group.entries.length > 1;
+
+          if (!hasMultiple) {
+            // Single entry — render as before
+            return renderEntry(group.entries[0]);
+          }
+
+          // Multiple entries at same company — LinkedIn-style grouping
+          return (
+            <Card key={group.company} className="mb-3 border-[var(--border-subtle)] bg-[var(--bg-card)]">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Icon className="h-5 w-5 text-[var(--text-muted)]" />
+                  <h4 className="font-semibold text-[var(--text-primary)]">{group.company}</h4>
+                  {group.entries[0].company_description && (
+                    <span className="text-xs italic text-[var(--text-muted)]">
+                      — {group.entries[0].company_description}
+                    </span>
+                  )}
+                </div>
+                <div className="ml-8 space-y-4 border-l-2 border-[var(--border-subtle)] pl-4">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {group.entries.map((entry: any) => renderRole(entry))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Render a single role within a company group (no company name, just title/dates/bullets)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderRole(entry: any) {
+    const isEditing = editingId === entry.id;
+    const isConfirmingDelete = deletingId === entry.id;
+
+    return (
+      <div key={entry.id}>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            {isEditing ? (
+              renderEditForm(entry)
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-[var(--text-primary)]">
+                    {entry.job_title || "Untitled Role"}
+                  </span>
+                  {entry.user_confirmed && (
+                    <Badge variant="outline" className="text-xs">Confirmed</Badge>
+                  )}
+                </div>
+                {(entry.date_start || entry.date_end) && (
+                  <p className="text-xs text-[var(--text-faint)]">
+                    {formatDate(entry.date_start)} — {formatDate(entry.date_end)}
+                  </p>
+                )}
+                {renderChunksAndLink(entry)}
+              </>
+            )}
+          </div>
+          {!isEditing && renderActions(entry, isConfirmingDelete)}
+        </div>
+      </div>
+    );
+  }
+
+  // Extract the edit form rendering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderEditForm(entry: any) {
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            value={editData.company_name}
+            onChange={(e) => setEditData({ ...editData, company_name: e.target.value })}
+            placeholder="Company"
+            className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+          />
+          <Input
+            value={editData.job_title}
+            onChange={(e) => setEditData({ ...editData, job_title: e.target.value })}
+            placeholder="Title"
+            className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-[var(--text-muted)]">Company/Project Description</label>
+          <Input
+            value={editData.company_description}
+            onChange={(e) => setEditData({ ...editData, company_description: e.target.value })}
+            placeholder="What does this company or project do? (1-2 sentences)"
+            className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-[11px] text-[var(--text-muted)]">Start Date</label>
+            <Input
+              type="date"
+              value={editData.date_start}
+              onChange={(e) => setEditData({ ...editData, date_start: e.target.value })}
+              className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-[var(--text-muted)]">End Date (blank = present)</label>
+            <Input
+              type="date"
+              value={editData.date_end}
+              onChange={(e) => setEditData({ ...editData, date_end: e.target.value })}
+              className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-[11px] font-medium text-[var(--text-muted)]">Bullet Points</label>
+          <div className="space-y-1.5">
+            {editChunks.map((chunk, i) => (
+              <div key={chunk.id} className="flex items-start gap-1.5">
+                <span className="mt-2.5 text-[var(--text-faint)]">&bull;</span>
+                <Input
+                  value={chunk.text}
+                  onChange={(e) => updateChunkText(i, e.target.value)}
+                  placeholder="Achievement or responsibility..."
+                  className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                />
+                <button onClick={() => removeChunk(i)} className="mt-2 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button onClick={addChunk} className="mt-2 flex items-center gap-1 text-xs text-[var(--accent)] hover:text-[var(--accent-dark)]">
+            <Plus size={12} /> Add bullet
+          </button>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" onClick={() => handleSaveEdit(entry.id)}>
+            <Check className="mr-1 h-3 w-3" /> Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setEditData({}); setEditChunks([]); setRemovedChunkIds([]); }}>
+            <X className="mr-1 h-3 w-3" /> Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract chunks, description, and link input rendering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderChunksAndLink(entry: any) {
+    const entryChunks = chunks.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any) => c.entry_id === entry.id
+    );
+    return (
+      <>
+        {entry.company_description && (
+          <p className="mt-1.5 text-xs italic text-[var(--text-muted)]">
+            {entry.company_description}
+          </p>
+        )}
+        {entryChunks.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {entryChunks.map((chunk: any) => (
+              <li key={chunk.id} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-[var(--text-muted)]" />
+                <span>{chunk.chunk_text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!entryChunks.length && entry.description && (
+          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-primary)]">{entry.description}</p>
+        )}
+        {linkingId === entry.id && (
+          <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
+            <Input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://www.example.com"
+              className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(entry.id); }}
+            />
+            <Button size="sm" onClick={() => handleAddLink(entry.id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
+              {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
+            </Button>
+            <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Extract action buttons rendering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderActions(entry: any, isConfirmingDelete: boolean) {
+    return (
+      <div className="ml-2 flex items-center gap-1">
+        <button
+          onClick={() => { setLinkingId(linkingId === entry.id ? null : entry.id); setLinkUrl(""); }}
+          className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
+          title="Add URL"
+        >
+          <LinkIcon size={14} />
+        </button>
+        <button
+          onClick={() => startEditing(entry)}
+          className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+        >
+          <Pencil size={14} />
+        </button>
+        {isConfirmingDelete ? (
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="destructive" onClick={() => handleDelete(entry.id)} className="h-7 px-2 text-xs">Delete</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setDeletingId(entry.id)}
+            className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--red-muted)]"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderFlatSection(title: string, items: any[]) {
     if (items.length === 0) return null;
     return (
       <div className="mb-8">
@@ -483,11 +743,11 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
 
   return (
     <div>
-      {renderSection("Work Experience", jobs)}
-      {renderSection("Projects", projects)}
-      {renderSection("Education", education)}
-      {renderSection("Awards & Certifications", awards)}
-      {renderSection("Skills & Expertise", skills)}
+      {renderGroupedSection("Work Experience", jobs)}
+      {renderGroupedSection("Projects", projects)}
+      {renderFlatSection("Education", education)}
+      {renderFlatSection("Awards & Certifications", awards)}
+      {renderFlatSection("Skills & Expertise", skills)}
     </div>
   );
 }
