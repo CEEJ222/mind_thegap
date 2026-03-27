@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
-import { Pencil, Check, X, Trash2, Plus, Link as LinkIcon, Loader2, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
+import { Pencil, Check, X, Trash2, Plus, Link as LinkIcon, Loader2, Merge, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,6 +15,8 @@ interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   chunks: any[];
   onUpdate: () => void;
+  onMerge?: () => void;
+  mergeActive?: boolean;
 }
 
 const typeIcons: Record<string, typeof Briefcase> = {
@@ -26,7 +28,7 @@ const typeIcons: Record<string, typeof Briefcase> = {
   skills: Wrench,
 };
 
-export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
+export function ProfileDisplay({ entries, chunks, onUpdate, onMerge, mergeActive }: Props) {
   const supabase = createClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -418,6 +420,58 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderGroupedCompany(group: { company: string; entries: any[] }, Icon: typeof Briefcase) {
+    return (
+      <div key={group.company} className="mb-5 pb-5 border-b border-[var(--border-subtle)] last:border-b-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3">
+            <Icon className="h-5 w-5 text-[var(--text-muted)]" />
+            <h4 className="font-semibold text-[var(--text-primary)]">{group.company}</h4>
+          </div>
+          <button
+            onClick={() => {
+              setLinkingId(linkingId === `company-${group.company}` ? null : `company-${group.company}`);
+              setLinkUrl("");
+            }}
+            className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
+            title="Add company URL"
+          >
+            <LinkIcon size={14} />
+          </button>
+        </div>
+        {linkingId === `company-${group.company}` && (
+          <div className="mb-2 ml-8 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
+            <Input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://www.example.com"
+              className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(group.entries[0].id); }}
+              autoFocus
+            />
+            <Button size="sm" onClick={() => handleAddLink(group.entries[0].id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
+              {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
+            </Button>
+            <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {group.entries[0].company_description && (
+          <p className="mb-3 ml-8 text-xs italic text-[var(--text-muted)]">
+            {group.entries[0].company_description}
+          </p>
+        )}
+        <div className="ml-8 space-y-4 border-l-2 border-[var(--border-subtle)] pl-4">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {group.entries.map((entry: any) => renderRole(entry))}
+        </div>
+      </div>
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function renderGroupedSection(title: string, items: any[]) {
     if (items.length === 0) return null;
     const groups = groupByCompany(items);
@@ -427,64 +481,8 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
         <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
         {groups.map((group) => {
           const Icon = typeIcons[group.entries[0].entry_type] || Briefcase;
-          const hasMultiple = group.entries.length > 1;
-
-          if (!hasMultiple) {
-            // Single entry — render as before
-            return renderEntry(group.entries[0]);
-          }
-
-          // Multiple entries at same company — LinkedIn-style grouping
-          return (
-            <div key={group.company} className="mb-5 pb-5 border-b border-[var(--border-subtle)] last:border-b-0">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-3">
-                    <Icon className="h-5 w-5 text-[var(--text-muted)]" />
-                    <h4 className="font-semibold text-[var(--text-primary)]">{group.company}</h4>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setLinkingId(linkingId === `company-${group.company}` ? null : `company-${group.company}`);
-                      setLinkUrl("");
-                    }}
-                    className="rounded-md p-1.5 text-[var(--text-faint)] hover:bg-[var(--bg-overlay)] hover:text-[var(--accent)]"
-                    title="Add company URL"
-                  >
-                    <LinkIcon size={14} />
-                  </button>
-                </div>
-                {/* Company link input */}
-                {linkingId === `company-${group.company}` && (
-                  <div className="mb-2 ml-8 flex items-center gap-2 rounded-md bg-[var(--bg-overlay)] p-2">
-                    <Input
-                      type="url"
-                      value={linkUrl}
-                      onChange={(e) => setLinkUrl(e.target.value)}
-                      placeholder="https://www.example.com"
-                      className="h-8 border-[var(--border-input)] bg-[var(--bg-card)] text-xs"
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(group.entries[0].id); }}
-                      autoFocus
-                    />
-                    <Button size="sm" onClick={() => handleAddLink(group.entries[0].id)} disabled={!linkUrl.trim() || linkLoading} className="h-8 px-3 text-xs">
-                      {linkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Scrape"}
-                    </Button>
-                    <button onClick={() => { setLinkingId(null); setLinkUrl(""); }} className="text-[var(--text-faint)] hover:text-[var(--text-primary)]">
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
-                {/* Company description */}
-                {group.entries[0].company_description && (
-                  <p className="mb-3 ml-8 text-xs italic text-[var(--text-muted)]">
-                    {group.entries[0].company_description}
-                  </p>
-                )}
-                <div className="ml-8 space-y-4 border-l-2 border-[var(--border-subtle)] pl-4">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {group.entries.map((entry: any) => renderRole(entry))}
-                </div>
-            </div>
-          );
+          if (group.entries.length === 1) return renderEntry(group.entries[0]);
+          return renderGroupedCompany(group, Icon);
         })}
       </div>
     );
@@ -707,7 +705,28 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
 
   return (
     <div>
-      {renderGroupedSection("Work Experience", jobs)}
+      {jobs.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Work Experience</h2>
+            {onMerge && (
+              <button
+                onClick={onMerge}
+                className={`flex items-center gap-1.5 text-xs ${mergeActive ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--accent)]"}`}
+              >
+                <Merge size={13} />
+                Merge Entries
+              </button>
+            )}
+          </div>
+          {groupByCompany(jobs).map((group) => {
+            const Icon = typeIcons[group.entries[0].entry_type] || Briefcase;
+            const hasMultiple = group.entries.length > 1;
+            if (!hasMultiple) return renderEntry(group.entries[0]);
+            return renderGroupedCompany(group, Icon);
+          })}
+        </div>
+      )}
       {renderGroupedSection("Projects", projects)}
       {renderFlatSection("Education", education)}
       {renderFlatSection("Awards & Certifications", awards)}

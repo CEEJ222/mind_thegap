@@ -228,20 +228,6 @@ export default function ProfilePage() {
         <div className="flex gap-8">
           {/* Left column — Profile entries */}
           <div className="flex-1 min-w-0">
-            {/* Work Experience header with merge */}
-            {entries.length >= 2 && (
-              <div className="mb-4 flex items-center justify-between">
-                <div />
-                <button
-                  onClick={() => setActiveSection(activeSection === "merge" ? null : "merge")}
-                  className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--accent)]"
-                >
-                  <Merge size={13} />
-                  Merge Entries
-                </button>
-              </div>
-            )}
-
             {activeSection === "merge" && (
               <Card className="mb-6">
                 <CardContent className="pt-6">
@@ -255,7 +241,13 @@ export default function ProfilePage() {
               </Card>
             )}
 
-            <ProfileDisplay entries={entries} chunks={chunks} onUpdate={loadData} />
+            <ProfileDisplay
+              entries={entries}
+              chunks={chunks}
+              onUpdate={loadData}
+              onMerge={entries.length >= 2 ? () => setActiveSection(activeSection === "merge" ? null : "merge") : undefined}
+              mergeActive={activeSection === "merge"}
+            />
           </div>
 
           {/* Right column — Files & Links */}
