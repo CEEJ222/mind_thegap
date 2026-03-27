@@ -151,16 +151,29 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Download the markdown resume from storage
-    const { data: fileData, error } = await supabase.storage
-      .from("resumes")
-      .download(file_path);
+    // Try getting resume content from the database first (most reliable)
+    let markdownContent = "";
 
-    if (error || !fileData) {
-      return NextResponse.json({ error: "Failed to download resume" }, { status: 500 });
+    const { data: resumeRecord } = await supabase
+      .from("generated_resumes")
+      .select("editorial_notes")
+      .eq("file_path", file_path)
+      .single();
+
+    if (resumeRecord?.editorial_notes?.resume_content) {
+      markdownContent = resumeRecord.editorial_notes.resume_content;
+    } else {
+      // Fallback: try downloading from storage
+      const { data: fileData, error } = await supabase.storage
+        .from("resumes")
+        .download(file_path);
+
+      if (error || !fileData) {
+        console.error("Storage download error:", error, "file_path:", file_path);
+        return NextResponse.json({ error: "Resume content not found" }, { status: 500 });
+      }
+      markdownContent = await fileData.text();
     }
-
-    const markdownContent = await fileData.text();
 
     if (format === "docx") {
       const paragraphs = markdownToDocxParagraphs(markdownContent);

@@ -145,7 +145,7 @@ Return ONLY valid JSON, no markdown fences.`,
         format,
         length_setting: lengthSetting,
         summary_included: includeSummary,
-        editorial_notes: result.editorial_notes,
+        editorial_notes: { ...result.editorial_notes, resume_content: result.resume_content },
         version: nextVersion,
       })
       .select()
