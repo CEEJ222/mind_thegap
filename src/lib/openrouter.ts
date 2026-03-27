@@ -3,11 +3,11 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Model selection by task complexity
 export const MODELS = {
   // Complex reasoning: gap analysis, resume generation
-  REASONING: "anthropic/claude-sonnet-4-20250514",
+  REASONING: "anthropic/claude-3.5-sonnet",
   // Structured extraction: document parsing, URL scraping
-  EXTRACTION: "anthropic/claude-sonnet-4-20250514",
+  EXTRACTION: "anthropic/claude-3.5-sonnet",
   // Light tasks: single theme rescore
-  LIGHT: "anthropic/claude-haiku-4-5-20251001",
+  LIGHT: "anthropic/claude-3-haiku",
 } as const;
 
 interface OpenRouterMessage {
