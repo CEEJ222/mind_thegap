@@ -178,22 +178,19 @@ function markdownToDocxParagraphs(content: string): Paragraph[] {
 
     // Lines that look like job titles: "Role | Company | Dates" or "**Role** | Company"
     if (trimmed.includes("|") && !trimmed.startsWith("#")) {
-      const runs = parseBoldText(trimmed);
+      // Strip any ** markers and render as single blue bold line
+      const cleanText = trimmed.replace(/\*\*/g, "");
       paragraphs.push(
         new Paragraph({
-          children: runs.map((r) => {
-            // Make the whole line bold and blue if it looks like a job header
-            if (!trimmed.startsWith("*")) {
-              return new TextRun({
-                text: r.text || "",
-                bold: true,
-                size: 20,
-                font: "Calibri",
-                color: BLUE,
-              });
-            }
-            return r;
-          }),
+          children: [
+            new TextRun({
+              text: cleanText,
+              bold: true,
+              size: 20,
+              font: "Calibri",
+              color: BLUE,
+            }),
+          ],
           spacing: { before: 160, after: 40 },
         })
       );
