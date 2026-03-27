@@ -172,19 +172,27 @@ export async function PATCH(request: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Re-score this single theme from a gap analysis.
+          content: `Re-score this single theme from a gap analysis. The user has added new evidence to their profile.
 
 ## Theme: ${theme.theme_name}
+## Previous Score: ${theme.score_numeric}/100 (${theme.score_tier})
+
 ## Job Description context:
 ${app?.jd_text ?? ""}
 
-## Updated Candidate Profile:
+## Updated Candidate Profile (includes new evidence):
 ${profileContext}
+
+## Scoring Rules:
+- "strong" = score 75-100: Clear, direct evidence in the profile
+- "weak" = score 35-74: Indirect or partial evidence
+- "none" = score 0-34: No evidence found
+- The score_numeric MUST match the tier range above
 
 Respond with JSON only:
 {
   "score_tier": "strong" | "weak" | "none",
-  "score_numeric": number,
+  "score_numeric": number (must match tier range),
   "explanation": "string"
 }`,
         },
@@ -192,6 +200,15 @@ Respond with JSON only:
     });
 
     const updated = JSON.parse(text);
+
+    // Enforce tier/score consistency — AI sometimes returns mismatched values
+    if (updated.score_tier === "strong" && updated.score_numeric < 70) {
+      updated.score_numeric = Math.max(75, updated.score_numeric + 70);
+    } else if (updated.score_tier === "weak" && (updated.score_numeric < 30 || updated.score_numeric > 69)) {
+      updated.score_numeric = Math.min(69, Math.max(30, updated.score_numeric));
+    } else if (updated.score_tier === "none" && updated.score_numeric > 29) {
+      updated.score_numeric = Math.min(29, updated.score_numeric);
+    }
 
     await supabase
       .from("application_themes")
