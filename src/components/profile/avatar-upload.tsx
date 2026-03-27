@@ -153,7 +153,7 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
       {localUrl && (
         <button
           onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-faint)] hover:text-[var(--red-muted)] hover:border-[var(--red-muted)] shadow-sm"
+          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-faint)] hover:text-[var(--red-muted)] hover:border-[var(--red-muted)] shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
           title="Remove photo"
         >
           <X size={12} />
