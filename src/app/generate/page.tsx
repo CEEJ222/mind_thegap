@@ -163,19 +163,26 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col items-center justify-center px-9 py-16">
-      <Sparkles className="mb-6 h-12 w-12 text-[var(--accent)]" />
-      <h1 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">Generate a Tailored Resume</h1>
-      <p className="mb-8 text-[var(--text-muted)]">
+    <div className="mx-auto flex max-w-3xl flex-col items-center justify-center px-4 py-6 md:px-9 md:py-16">
+      <Sparkles className="mb-4 md:mb-6 h-10 w-10 md:h-12 md:w-12 text-[var(--accent)]" />
+      <h1 className="mb-2 text-xl md:text-2xl font-bold text-[var(--text-primary)] text-center">Generate a Tailored Resume</h1>
+      <p className="mb-4 md:mb-8 text-sm md:text-base text-[var(--text-muted)] text-center">
         Paste a job description and we&apos;ll analyze it against your profile
       </p>
       <div className="w-full">
         <Textarea
           placeholder="Paste job description here..."
           value={jdText}
-          onChange={(e) => setJdText(e.target.value)}
-          rows={12}
+          onChange={(e) => {
+            setJdText(e.target.value);
+            // Auto-expand textarea
+            const el = e.target;
+            el.style.height = "auto";
+            el.style.height = Math.max(120, Math.min(el.scrollHeight, 500)) + "px";
+          }}
+          rows={4}
           className="mb-4 resize-none border-[var(--border-input)] bg-[var(--bg-card)] text-base placeholder:text-[var(--text-faint)]"
+          style={{ minHeight: "120px" }}
         />
         <Button
           onClick={handleAnalyze}
