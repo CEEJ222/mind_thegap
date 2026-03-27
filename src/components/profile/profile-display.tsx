@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
-import { Pencil, Check, X, Trash2, Plus, Briefcase, GraduationCap, Award, FolderOpen } from "lucide-react";
+import { Pencil, Check, X, Trash2, Plus, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
 
 interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,6 +24,7 @@ const typeIcons: Record<string, typeof Briefcase> = {
   education: GraduationCap,
   award: Award,
   certification: Award,
+  skills: Wrench,
 };
 
 export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
@@ -48,6 +49,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
   const awards = entries.filter(
     (e: { entry_type: string }) => e.entry_type === "award" || e.entry_type === "certification"
   );
+  const skills = entries.filter((e: { entry_type: string }) => e.entry_type === "skills");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function startEditing(entry: any) {
@@ -380,6 +382,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
       {renderSection("Projects", projects)}
       {renderSection("Education", education)}
       {renderSection("Awards & Certifications", awards)}
+      {renderSection("Skills & Expertise", skills)}
     </div>
   );
 }

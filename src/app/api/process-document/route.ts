@@ -95,14 +95,14 @@ ${text}
 4. For each entry, extract: entry_type (job/project/education/award/certification), company_name, job_title, date_start (YYYY-MM-DD), date_end (YYYY-MM-DD or null if current), industry, domain.
 5. DATES: Use EXACTLY what is written in the document. If it says "January 2024", use "2024-01-01". If it says just "2023", use "2023-01-01". If it says "2018 – 2023", use start "2018-01-01" and end "2023-12-31". Do NOT guess or shift dates. If it says "Present" or is the current role, use null for date_end.
 6. For each entry, extract individual bullet points/achievements as separate chunks. Only include bullets that belong to THAT specific role.
-7. Extract a "skills" entry with entry_type "certification" and company_name "Skills & Expertise". Set BOTH date_start and date_end to null for skills. Put each skill category as a separate chunk (e.g. "Product: User Story Creation, Roadmap Development, Agile/Scrum").
+7. Extract a skills entry with entry_type "skills", company_name "Skills & Expertise", and job_title "Skills". Set BOTH date_start and date_end to null. Put each skill category as a separate chunk (e.g. "Product: User Story Creation, Roadmap Development, Agile/Scrum").
 
 Respond in this exact JSON format:
 {
   "document_type": "string",
   "entries": [
     {
-      "entry_type": "job|project|education|award|certification",
+      "entry_type": "job|project|education|award|certification|skills",
       "company_name": "string",
       "job_title": "string",
       "date_start": "YYYY-MM-DD or null",
@@ -137,7 +137,7 @@ Return ONLY valid JSON.`,
         .eq("company_name", entry.company_name)
         .eq("user_confirmed", false);
 
-      if (entry.entry_type !== "certification") {
+      if (entry.entry_type !== "skills" && entry.entry_type !== "certification") {
         dedupQuery = dedupQuery.eq("job_title", entry.job_title);
       }
 

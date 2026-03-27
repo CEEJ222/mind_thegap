@@ -1,4 +1,4 @@
-export type EntryType = "job" | "project" | "education" | "award" | "certification";
+export type EntryType = "job" | "project" | "education" | "award" | "certification" | "skills";
 export type EntrySource = "resume_upload" | "url_scrape" | "manual_entry" | "gap_fill";
 export type OutputFormat = "docx" | "pdf";
 export type ResumeLength = "1_page" | "1_5_pages" | "2_pages" | "no_max";
