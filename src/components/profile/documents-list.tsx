@@ -90,14 +90,14 @@ export function DocumentsList({ documents, urls, onUpdate }: Props) {
             key={doc.id}
             className="flex items-center justify-between rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               {doc.file_path?.startsWith("pasted/") ? (
-                <ClipboardPaste className="h-5 w-5 text-[var(--text-muted)]" />
+                <ClipboardPaste className="h-5 w-5 flex-shrink-0 text-[var(--text-muted)]" />
               ) : (
-                <FileText className="h-5 w-5 text-[var(--text-muted)]" />
+                <FileText className="h-5 w-5 flex-shrink-0 text-[var(--text-muted)]" />
               )}
-              <div>
-                <div className="text-sm font-medium text-[var(--text-primary)]">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-[var(--text-primary)]">
                   {doc.file_name}
                 </div>
                 <div className="text-xs text-[var(--text-faint)]">
@@ -145,10 +145,10 @@ export function DocumentsList({ documents, urls, onUpdate }: Props) {
             key={u.id}
             className="flex items-center justify-between rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3"
           >
-            <div className="flex items-center gap-3">
-              <ExternalLink className="h-5 w-5 text-[var(--text-muted)]" />
-              <div>
-                <div className="text-sm font-medium text-[var(--text-primary)]">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <ExternalLink className="h-5 w-5 flex-shrink-0 text-[var(--text-muted)]" />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-[var(--text-primary)]">
                   {u.url}
                 </div>
                 <div className="text-xs text-[var(--text-faint)]">

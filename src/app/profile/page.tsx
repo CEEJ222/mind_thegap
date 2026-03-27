@@ -259,8 +259,8 @@ export default function ProfilePage() {
           </div>
 
           {/* Right column — Files & Links */}
-          <div className="w-[300px] flex-shrink-0">
-            <div className="sticky top-6">
+          <div className="w-[300px] flex-shrink-0 overflow-hidden">
+            <div className="sticky top-6 max-h-[calc(100vh-120px)] overflow-y-auto">
               {/* Add actions dropdown */}
               <div className="relative mb-4">
                 <Button
