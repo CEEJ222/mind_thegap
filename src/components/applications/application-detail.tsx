@@ -47,11 +47,25 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
   }, [loadDetails]);
 
   async function handleDownload(filePath: string) {
-    const { data } = await supabase.storage
-      .from("resumes")
-      .createSignedUrl(filePath, 60);
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, "_blank");
+    try {
+      const fileName = `${application.company_name?.replace(/\s+/g, "_") || "resume"}_${application.job_title?.replace(/\s+/g, "_") || "role"}`;
+      const res = await fetch("/api/export-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path: filePath, format: "docx", file_name: fileName }),
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fileName}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
     }
   }
 
