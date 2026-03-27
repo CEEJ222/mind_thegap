@@ -93,8 +93,9 @@ ${text}
 2. Extract each distinct job, project, education entry, award, or certification.
 3. IMPORTANT: If the same company appears with DIFFERENT job titles or date ranges, create SEPARATE entries for each role. For example, "Senior PM at Acme (2022-2023)" and "Director at Acme (2024-present)" must be two separate entries, not merged.
 4. For each entry, extract: entry_type (job/project/education/award/certification), company_name, job_title, date_start (YYYY-MM-DD), date_end (YYYY-MM-DD or null if current), industry, domain.
-5. For each entry, extract individual bullet points/achievements as separate chunks. Only include bullets that belong to THAT specific role.
-6. Extract a "skills" entry with entry_type "certification" and company_name "Skills & Expertise". Put each skill category as a separate chunk (e.g. "Product: User Story Creation, Roadmap Development, Agile/Scrum").
+5. DATES: Use EXACTLY what is written in the document. If it says "January 2024", use "2024-01-01". If it says just "2023", use "2023-01-01". If it says "2018 – 2023", use start "2018-01-01" and end "2023-12-31". Do NOT guess or shift dates. If it says "Present" or is the current role, use null for date_end.
+6. For each entry, extract individual bullet points/achievements as separate chunks. Only include bullets that belong to THAT specific role.
+7. Extract a "skills" entry with entry_type "certification" and company_name "Skills & Expertise". Set BOTH date_start and date_end to null for skills. Put each skill category as a separate chunk (e.g. "Product: User Story Creation, Roadmap Development, Agile/Scrum").
 
 Respond in this exact JSON format:
 {
