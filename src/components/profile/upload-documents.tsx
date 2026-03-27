@@ -4,7 +4,8 @@ import { useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2, FileText, X } from "lucide-react";
+import { Upload, FileText, X } from "lucide-react";
+import { showSnackbar } from "@/components/ui/snackbar";
 
 interface Props {
   onComplete: () => void;
@@ -20,14 +21,12 @@ export function UploadDocuments({ onComplete }: Props) {
   const { user } = useAuth();
   const supabase = createClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [progress, setProgress] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     setSelectedFiles((prev) => [...prev, ...files]);
-    // Reset input so the same file can be re-selected
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -37,12 +36,12 @@ export function UploadDocuments({ onComplete }: Props) {
 
   async function handleUpload() {
     if (selectedFiles.length === 0 || !user) return;
-    setUploading(true);
-    setProgress(0);
+    setSubmitting(true);
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
+      const fileNames: string[] = [];
+
+      for (const file of selectedFiles) {
         const filePath = `${user.id}/${Date.now()}_${file.name}`;
 
         const { error: uploadError } = await supabase.storage
@@ -65,7 +64,9 @@ export function UploadDocuments({ onComplete }: Props) {
 
         if (dbError) throw dbError;
 
-        // Fire and forget — processing happens in background
+        fileNames.push(file.name);
+
+        // Fire processing in background (don't await)
         fetch("/api/process-document", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -75,18 +76,22 @@ export function UploadDocuments({ onComplete }: Props) {
             file_name: file.name,
             document_id: docRecord?.id,
           }),
+        }).then(() => {
+          showSnackbar(`"${file.name}" processed — profile updated`);
+          onComplete(); // Refresh after each file finishes
         });
-
-        setProgress(i + 1);
       }
 
+      // Close form immediately
       setSelectedFiles([]);
+      const label = fileNames.length === 1 ? fileNames[0] : `${fileNames.length} files`;
+      showSnackbar(`Uploaded ${label} — processing in background`, "info");
       onComplete();
     } catch (err) {
       console.error("Upload failed:", err);
+      showSnackbar("Upload failed", "error");
     } finally {
-      setUploading(false);
-      setProgress(0);
+      setSubmitting(false);
     }
   }
 
@@ -141,17 +146,10 @@ export function UploadDocuments({ onComplete }: Props) {
 
       <Button
         onClick={handleUpload}
-        disabled={selectedFiles.length === 0 || uploading}
+        disabled={selectedFiles.length === 0 || submitting}
         className="w-full"
       >
-        {uploading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Uploading {progress}/{selectedFiles.length}...
-          </>
-        ) : (
-          `Upload ${selectedFiles.length === 0 ? "" : selectedFiles.length + " "}file${selectedFiles.length !== 1 ? "s" : ""}`
-        )}
+        {`Upload ${selectedFiles.length === 0 ? "" : selectedFiles.length + " "}file${selectedFiles.length !== 1 ? "s" : ""}`}
       </Button>
     </div>
   );

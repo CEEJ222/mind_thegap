@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ClipboardPaste } from "lucide-react";
+import { ClipboardPaste } from "lucide-react";
 import { showSnackbar } from "@/components/ui/snackbar";
 
 interface Props {
@@ -18,17 +18,16 @@ export function PasteAndParse({ onComplete }: Props) {
   const supabase = createClient();
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  const [parsing, setParsing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleParse() {
     if (!text.trim() || !user) return;
-    setParsing(true);
+    setSubmitting(true);
 
     try {
       const label = title.trim() || `Pasted content — ${new Date().toLocaleDateString()}`;
-      const lineCount = text.split("\n").length;
 
-      // Create a document record so it appears in "Uploaded Files & Links"
+      // Create a document record
       const { data: docRecord, error: dbError } = await supabase
         .from("uploaded_documents")
         .insert({
@@ -44,6 +43,13 @@ export function PasteAndParse({ onComplete }: Props) {
 
       if (dbError) throw dbError;
 
+      // Close form immediately and show progress snackbar
+      setTitle("");
+      setText("");
+      showSnackbar(`Processing "${label}"...`, "info");
+      onComplete();
+
+      // Fire in background
       const res = await fetch("/api/process-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,15 +62,13 @@ export function PasteAndParse({ onComplete }: Props) {
 
       if (!res.ok) throw new Error("Processing failed");
 
-      setTitle("");
-      setText("");
-      showSnackbar(`"${label}" parsed — ${lineCount} lines processed`);
-      onComplete();
+      showSnackbar(`"${label}" parsed — profile updated`);
+      onComplete(); // Refresh data again after processing completes
     } catch (err) {
       console.error("Parse failed:", err);
       showSnackbar("Failed to parse content", "error");
     } finally {
-      setParsing(false);
+      setSubmitting(false);
     }
   }
 
@@ -90,20 +94,11 @@ export function PasteAndParse({ onComplete }: Props) {
       />
       <Button
         onClick={handleParse}
-        disabled={!text.trim() || parsing}
+        disabled={!text.trim() || submitting}
         className="w-full"
       >
-        {parsing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Parsing...
-          </>
-        ) : (
-          <>
-            <ClipboardPaste className="mr-2 h-4 w-4" />
-            Parse & Add to Profile
-          </>
-        )}
+        <ClipboardPaste className="mr-2 h-4 w-4" />
+        Parse & Add to Profile
       </Button>
     </div>
   );
