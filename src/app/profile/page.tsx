@@ -13,6 +13,7 @@ import { PasteAndParse } from "@/components/profile/paste-and-parse";
 import { MergeEntries } from "@/components/profile/merge-entries";
 import { ProfileDisplay } from "@/components/profile/profile-display";
 import { DocumentsList } from "@/components/profile/documents-list";
+import { AvatarUpload } from "@/components/profile/avatar-upload";
 import {
   Upload,
   Link as LinkIcon,
@@ -134,12 +135,22 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <h1 className="mb-2 text-2xl font-bold">Profile</h1>
-      <p className="mb-6 text-muted-foreground">
-        {isNewUser
-          ? "Get started by adding your experience. Complete at least one item to unlock resume generation."
-          : "Manage your career profile data. Everything you add here is used to generate tailored resumes."}
-      </p>
+      {/* Profile header with avatar */}
+      <div className="mb-6 flex items-center gap-5">
+        <AvatarUpload
+          fullName={user?.user_metadata?.full_name || user?.email || "User"}
+          avatarUrl={null}
+          onUpdate={loadData}
+        />
+        <div>
+          <h1 className="text-2xl font-bold">{user?.user_metadata?.full_name || "Profile"}</h1>
+          <p className="text-muted-foreground">
+            {isNewUser
+              ? "Get started by adding your experience."
+              : "Manage your career profile data."}
+          </p>
+        </div>
+      </div>
 
       {/* AI-generated summary */}
       {!isNewUser && (
