@@ -3,54 +3,87 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
 import mammoth from "mammoth";
 
-// Ask AI to match new entries against existing ones
-async function fuzzyMatchEntries(
-  newEntries: { company_name: string; job_title: string; entry_type: string; date_start: string | null; date_end: string | null }[],
-  existingEntries: { id: string; company_name: string; job_title: string; entry_type: string; date_start: string | null; date_end: string | null }[]
-): Promise<Record<number, string | null>> {
-  if (existingEntries.length === 0) {
-    // No existing entries — everything is new
-    const result: Record<number, string | null> = {};
-    newEntries.forEach((_, i) => { result[i] = null; });
-    return result;
+interface EntryInfo {
+  id?: string;
+  company_name: string;
+  job_title: string;
+  entry_type: string;
+  date_start: string | null;
+  date_end: string | null;
+}
+
+// Normalize a string for fuzzy comparison
+function normalize(s: string | null): string {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "") // strip punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Check if one string contains the other or they share a significant word
+function companyMatch(a: string, b: string): boolean {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  // Check if the first significant word matches (e.g. "SENSER" matches "SENSER (aka Survey Insights)")
+  const wordsA = na.split(" ").filter(w => w.length > 2);
+  const wordsB = nb.split(" ").filter(w => w.length > 2);
+  if (wordsA[0] && wordsB[0] && wordsA[0] === wordsB[0]) return true;
+  return false;
+}
+
+// Check if two date ranges overlap
+function datesOverlap(a: EntryInfo, b: EntryInfo): boolean {
+  // If either has no dates, can't determine overlap — treat as potential match
+  if (!a.date_start && !b.date_start) return true;
+  if (!a.date_start || !b.date_start) return true;
+
+  const aStart = new Date(a.date_start).getTime();
+  const aEnd = a.date_end ? new Date(a.date_end).getTime() : Date.now();
+  const bStart = new Date(b.date_start).getTime();
+  const bEnd = b.date_end ? new Date(b.date_end).getTime() : Date.now();
+
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+// Find the best matching existing entry for a new entry
+function findMatch(newEntry: EntryInfo, existingEntries: EntryInfo[]): string | null {
+  // Skills/certifications: match on company name only
+  if (newEntry.entry_type === "skills" || newEntry.entry_type === "certification") {
+    const match = existingEntries.find(e =>
+      (e.entry_type === "skills" || e.entry_type === "certification") &&
+      companyMatch(e.company_name, newEntry.company_name)
+    );
+    return match?.id ?? null;
   }
 
-  const existingList = existingEntries
-    .map((e, i) => `  [${i}] "${e.company_name}" | "${e.job_title}" | ${e.entry_type} | ${e.date_start ?? "?"} – ${e.date_end ?? "present"}`)
-    .join("\n");
+  // For jobs/projects/education: match on company name + overlapping dates
+  const candidates = existingEntries.filter(e =>
+    e.entry_type === newEntry.entry_type &&
+    companyMatch(e.company_name, newEntry.company_name) &&
+    datesOverlap(e, newEntry)
+  );
 
-  const newList = newEntries
-    .map((e, i) => `  [${i}] "${e.company_name}" | "${e.job_title}" | ${e.entry_type} | ${e.date_start ?? "?"} – ${e.date_end ?? "present"}`)
-    .join("\n");
+  if (candidates.length === 0) return null;
 
-  const response = await chatCompletion({
-    model: MODELS.LIGHT,
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: `Match new entries to existing profile entries. Two entries match if they refer to the SAME role at the SAME company, even if:
-- Job titles differ slightly ("Product Manager" vs "Product Manager — CRM" vs "Senior Technical PM — Oracle EPM")
-- Company names differ slightly ("SENSER" vs "SENSER (aka Survey Insights)")
-- Date ranges overlap or are close
+  // If only one candidate, it's the match
+  if (candidates.length === 1) return candidates[0].id ?? null;
 
-They do NOT match if they are clearly different roles at the same company (e.g. "Director" vs "Senior PM" with different date ranges).
-
-## Existing entries:
-${existingList}
-
-## New entries to match:
-${newList}
-
-For each new entry index, return the existing entry index it matches, or null if it's new.
-
-Return ONLY a JSON object mapping new index to existing index or null:
-{"0": 2, "1": null, "2": 5, "3": null}`,
-      },
-    ],
+  // Multiple candidates (e.g. two roles at same company with overlapping dates)
+  // Try to narrow by title similarity
+  const titleMatch = candidates.find(e => {
+    const nt = normalize(newEntry.job_title);
+    const et = normalize(e.job_title);
+    if (!nt || !et) return false;
+    return nt.includes(et) || et.includes(nt) ||
+      nt.split(" ").some(w => w.length > 3 && et.includes(w));
   });
 
-  return JSON.parse(response);
+  return titleMatch?.id ?? candidates[0].id ?? null;
 }
 
 export async function POST(request: NextRequest) {
@@ -177,50 +210,51 @@ Return ONLY valid JSON.`,
         .eq("file_path", file_path);
     }
 
-    // Step 2: Get existing entries for fuzzy matching
+    // Step 2: Get existing entries for deterministic fuzzy matching
     const { data: existingEntries } = await supabase
       .from("profile_entries")
-      .select("id, company_name, job_title, entry_type, date_start, date_end")
+      .select("id, company_name, job_title, entry_type, date_start, date_end, user_confirmed")
       .eq("user_id", user_id);
 
-    // Step 3: AI fuzzy match new entries against existing ones
-    const matchMap = await fuzzyMatchEntries(
-      parsed.entries.map((e: Record<string, string | null>) => ({
-        company_name: e.company_name,
-        job_title: e.job_title,
-        entry_type: e.entry_type,
-        date_start: e.date_start,
-        date_end: e.date_end,
-      })),
-      (existingEntries ?? []).map((e: Record<string, string>) => ({
-        id: e.id,
-        company_name: e.company_name,
-        job_title: e.job_title,
-        entry_type: e.entry_type,
-        date_start: e.date_start,
-        date_end: e.date_end,
-      }))
-    );
+    const existingList: EntryInfo[] = (existingEntries ?? []).map((e: Record<string, string>) => ({
+      id: e.id,
+      company_name: e.company_name || "",
+      job_title: e.job_title || "",
+      entry_type: e.entry_type || "",
+      date_start: e.date_start,
+      date_end: e.date_end,
+    }));
 
-    // Step 4: Insert or merge entries based on match results
-    for (let i = 0; i < parsed.entries.length; i++) {
-      const entry = parsed.entries[i];
-      const matchedExistingIndex = matchMap[i];
+    // Step 3: Match and insert/merge each entry
+    for (const entry of parsed.entries) {
+      const matchId = findMatch(
+        {
+          company_name: entry.company_name || "",
+          job_title: entry.job_title || "",
+          entry_type: entry.entry_type || "",
+          date_start: entry.date_start,
+          date_end: entry.date_end,
+        },
+        existingList
+      );
 
       let entryId: string;
 
-      if (matchedExistingIndex !== null && matchedExistingIndex !== undefined && existingEntries) {
-        // Matched an existing entry — merge chunks into it
-        const matchedEntry = existingEntries[matchedExistingIndex];
-        if (matchedEntry) {
-          entryId = matchedEntry.id;
-        } else {
-          // Bad match index — create new
-          entryId = await createNewEntry(supabase, user_id, entry, docId);
-        }
+      if (matchId) {
+        // Matched existing entry — merge chunks into it
+        entryId = matchId;
       } else {
         // No match — create new entry
         entryId = await createNewEntry(supabase, user_id, entry, docId);
+        // Add to existing list so subsequent entries in this batch can match against it
+        existingList.push({
+          id: entryId,
+          company_name: entry.company_name || "",
+          job_title: entry.job_title || "",
+          entry_type: entry.entry_type || "",
+          date_start: entry.date_start,
+          date_end: entry.date_end,
+        });
       }
 
       // Insert chunks with dedup (exact text match)
