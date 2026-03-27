@@ -38,7 +38,7 @@ export function AddLink({ onComplete }: Props) {
       await fetch("/api/scrape-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id, url: url.trim() }),
+        body: JSON.stringify({ user_id: user.id, url: url.trim(), url_type: urlType }),
       });
 
       setUrl("");

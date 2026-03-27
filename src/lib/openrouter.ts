@@ -45,7 +45,7 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
       "Content-Type": "application/json",
       Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
       "HTTP-Referer": process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:3000",
-      "X-Title": "Mind the Gap",
+      "X-Title": "Mind the App",
     },
     body: JSON.stringify({
       model: options.model,

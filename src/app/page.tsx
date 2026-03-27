@@ -37,7 +37,7 @@ export default function LandingPage() {
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-4 md:px-12">
         <div className="text-xl font-semibold">
-          Mind <span className="text-accent">the Gap</span>
+          Mind <span className="text-accent">the App</span>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/auth/login">
@@ -58,7 +58,7 @@ export default function LandingPage() {
           <span className="text-accent">unique</span> as the role
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-          Mind the Gap analyzes job descriptions, finds what&apos;s missing from your
+          Mind the App analyzes job descriptions, finds what&apos;s missing from your
           profile, and generates tailored, editorial-quality resumes — every
           time.
         </p>
@@ -91,7 +91,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
-        Mind the Gap &copy; {new Date().getFullYear()}
+        Mind the App &copy; {new Date().getFullYear()}
       </footer>
     </div>
   );

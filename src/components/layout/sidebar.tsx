@@ -37,7 +37,7 @@ export function Sidebar() {
       <div className="flex h-14 items-center justify-between px-4">
         {!collapsed && (
           <Link href="/generate" className="text-lg font-semibold text-[var(--text-primary)]">
-            Mind <span className="text-[var(--accent)]">the Gap</span>
+            Mind <span className="text-[var(--accent)]">the App</span>
           </Link>
         )}
         <button

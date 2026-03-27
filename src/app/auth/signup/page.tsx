@@ -45,7 +45,7 @@ export default function SignupPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>
-            Mind <span className="text-accent">the Gap</span>
+            Mind <span className="text-accent">the App</span>
           </CardTitle>
           <CardDescription>Create your account</CardDescription>
         </CardHeader>

@@ -41,7 +41,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>
-            Mind <span className="text-accent">the Gap</span>
+            Mind <span className="text-accent">the App</span>
           </CardTitle>
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>

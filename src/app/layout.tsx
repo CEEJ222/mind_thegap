@@ -8,7 +8,7 @@ import { SnackbarProvider } from "@/components/ui/snackbar";
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
 
 export const metadata: Metadata = {
-  title: "Mind the Gap — AI Resume Generator",
+  title: "Mind the App — AI Resume Generator",
   description:
     "Generate tailored, editorial-quality resumes for every job application",
 };
