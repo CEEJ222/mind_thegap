@@ -27,17 +27,40 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
   const [uploading, setUploading] = useState(false);
   const [localUrl, setLocalUrl] = useState<string | null>(avatarUrl);
 
+  // Resize image to max 400x400 for crisp rendering
+  function resizeImage(file: File, maxSize: number): Promise<Blob> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) { height = (height * maxSize) / width; width = maxSize; }
+        } else {
+          if (height > maxSize) { width = (width * maxSize) / height; height = maxSize; }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.9);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     setUploading(true);
 
     try {
-      const filePath = `${user.id}/avatar.${file.name.split(".").pop()}`;
+      const resized = await resizeImage(file, 400);
+      const filePath = `${user.id}/avatar.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, resized, { upsert: true, contentType: "image/jpeg" });
 
       if (uploadError) throw uploadError;
 
@@ -45,7 +68,8 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
         .from("avatars")
         .getPublicUrl(filePath);
 
-      const publicUrl = urlData?.publicUrl;
+      // Add cache-buster to prevent stale/low-res cached images
+      const publicUrl = urlData?.publicUrl ? `${urlData.publicUrl}?t=${Date.now()}` : null;
 
       if (publicUrl) {
         await supabase
@@ -71,7 +95,7 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
     <div className="relative group">
       <button
         onClick={() => fileRef.current?.click()}
-        className="relative h-20 w-20 rounded-full overflow-hidden flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2"
+        className="relative h-24 w-24 rounded-full overflow-hidden flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2"
         disabled={uploading}
       >
         {localUrl ? (
@@ -80,6 +104,9 @@ export function AvatarUpload({ fullName, avatarUrl, onUpdate }: Props) {
             src={localUrl}
             alt="Avatar"
             className="h-full w-full object-cover"
+            width={192}
+            height={192}
+            style={{ imageRendering: "auto" }}
           />
         ) : (
           <div
