@@ -21,7 +21,6 @@ const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/applications", label: "Applications", icon: Briefcase },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -157,7 +156,20 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="border-t border-[var(--border-subtle)] p-2">
+      <div className="border-t border-[var(--border-subtle)] p-2 space-y-1">
+        <Link
+          href="/settings"
+          onClick={onNavClick}
+          className={cn(
+            "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+            pathname.startsWith("/settings")
+              ? "bg-[var(--accent)] text-[#0A5040] font-semibold"
+              : "text-[var(--text-muted)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
+          )}
+        >
+          <Settings size={18} />
+          {!collapsed && <span>Settings</span>}
+        </Link>
         <button
           onClick={signOut}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"

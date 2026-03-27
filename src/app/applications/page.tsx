@@ -165,21 +165,19 @@ export default function ApplicationsPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center justify-between mt-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--text-faint)]">
-                      {new Date(app.created_at).toLocaleDateString()}
-                    </span>
-                    <Select
-                      value={app.interview_converted}
-                      onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
-                      className="h-7 text-xs w-28"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="yes">Interview</option>
-                      <option value="no">Rejected</option>
-                    </Select>
-                  </div>
+                <div className="flex items-center gap-3 mt-3" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-xs text-[var(--text-faint)] flex-shrink-0">
+                    {new Date(app.created_at).toLocaleDateString()}
+                  </span>
+                  <Select
+                    value={app.interview_converted}
+                    onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
+                    className="h-7 text-xs flex-1 min-w-0"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="yes">Interview</option>
+                    <option value="no">Rejected</option>
+                  </Select>
                   {deletingId === app.id ? (
                     <div className="flex gap-1">
                       <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Delete</Button>

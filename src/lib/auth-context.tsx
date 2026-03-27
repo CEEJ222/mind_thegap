@@ -98,15 +98,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialized.current) return;
     initialized.current = true;
 
-    supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => {
-      const currentUser = data.user;
-      setUser(currentUser);
-      if (currentUser) {
-        loadUserData(currentUser.id).then(() => setLoading(false));
-      } else {
+    supabase.auth.getUser()
+      .then(({ data }: { data: { user: User | null } }) => {
+        const currentUser = data.user;
+        setUser(currentUser);
+        if (currentUser) {
+          loadUserData(currentUser.id).then(() => setLoading(false)).catch(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => {
         setLoading(false);
-      }
-    });
+      });
 
     const {
       data: { subscription },
