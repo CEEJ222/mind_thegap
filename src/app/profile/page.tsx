@@ -24,6 +24,8 @@ import {
   FileText,
   Globe,
   Pen,
+  Plus,
+  ChevronDown,
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -43,6 +45,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const isInitialLoad = useRef(true);
 
   async function regenerateSummary() {
@@ -57,7 +60,7 @@ export default function ProfilePage() {
       const data = await res.json();
       if (data.summary) setSummary(data.summary);
     } catch {
-      // Silently fail — summary is non-critical
+      // Silently fail
     } finally {
       setSummaryLoading(false);
     }
@@ -100,7 +103,6 @@ export default function ProfilePage() {
     setLoading(false);
     refreshProfile();
 
-    // Auto-regenerate summary on data changes (not initial load)
     if (!isInitialLoad.current && (entriesRes.data?.length ?? 0) > 0) {
       regenerateSummary();
     }
@@ -117,6 +119,11 @@ export default function ProfilePage() {
   const hasManualEntries = entries.some((e: { source: string }) => e.source === "manual_entry");
   const isNewUser = entries.length === 0 && documents.length === 0 && urls.length === 0;
 
+  function openSection(section: "upload" | "link" | "manual" | "paste") {
+    setActiveSection(section);
+    setAddMenuOpen(false);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -126,7 +133,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <h1 className="mb-2 text-2xl font-bold">Profile</h1>
       <p className="mb-6 text-muted-foreground">
         {isNewUser
@@ -160,186 +167,142 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Onboarding for new users — card grid */}
+      {/* Onboarding for new users */}
       {isNewUser && !activeSection && (
         <div className="mb-10 grid gap-4 md:grid-cols-4">
           {[
-            {
-              key: "upload" as const,
-              icon: FileText,
-              title: "Upload a Document",
-              description: "Resume, project write-up, performance review, or certification",
-              done: hasDocuments,
-            },
-            {
-              key: "link" as const,
-              icon: Globe,
-              title: "Add a Link",
-              description: "Personal website, portfolio, or project URL",
-              done: hasLinks,
-            },
-            {
-              key: "manual" as const,
-              icon: Pen,
-              title: "Add Manually",
-              description: "Type in a job, project, education, or award directly",
-              done: hasManualEntries,
-            },
-            {
-              key: "paste" as const,
-              icon: ClipboardPaste,
-              title: "Paste & Parse",
-              description: "Paste any document and AI will extract the structured data",
-              done: false,
-            },
+            { key: "upload" as const, icon: FileText, title: "Upload a Document", description: "Resume, project write-up, performance review, or certification", done: hasDocuments },
+            { key: "link" as const, icon: Globe, title: "Add a Link", description: "Personal website, portfolio, or project URL", done: hasLinks },
+            { key: "manual" as const, icon: Pen, title: "Add Manually", description: "Type in a job, project, education, or award directly", done: hasManualEntries },
+            { key: "paste" as const, icon: ClipboardPaste, title: "Paste & Parse", description: "Paste any document and AI will extract the structured data", done: false },
           ].map((item) => (
             <button
               key={item.key}
               onClick={() => setActiveSection(item.key)}
               className="group relative flex flex-col items-center rounded-lg border-2 border-dashed border-border bg-card p-8 text-center transition-all hover:border-accent hover:shadow-md"
             >
-              {item.done && (
-                <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-accent" />
-              )}
+              {item.done && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-accent" />}
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 transition-colors group-hover:bg-accent/20">
                 <item.icon className="h-7 w-7 text-accent" />
               </div>
               <h3 className="mb-1 font-semibold">{item.title}</h3>
-              <p className="text-sm text-muted-foreground">
-                {item.description}
-              </p>
+              <p className="text-sm text-muted-foreground">{item.description}</p>
             </button>
           ))}
         </div>
       )}
 
-      {/* Action buttons for returning users */}
+      {/* Active input section (full width, above the two-column layout) */}
+      {activeSection && activeSection !== "merge" && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            {activeSection === "upload" && (
+              <UploadDocuments onComplete={() => { loadData(); setActiveSection(null); showSnackbar("Document uploaded — processing in background"); }} />
+            )}
+            {activeSection === "link" && (
+              <AddLink onComplete={() => { loadData(); setActiveSection(null); showSnackbar("URL added — scraping in background"); }} />
+            )}
+            {activeSection === "manual" && (
+              <ManualEntry onComplete={() => { loadData(); setActiveSection(null); showSnackbar("Entry added to profile"); }} />
+            )}
+            {activeSection === "paste" && (
+              <PasteAndParse onComplete={() => { loadData(); setActiveSection(null); }} />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Two-column layout */}
       {!isNewUser && (
-        <div className="mb-8 flex flex-wrap gap-3">
-          <Button
-            variant={activeSection === "upload" ? "default" : "outline"}
-            onClick={() =>
-              setActiveSection(activeSection === "upload" ? null : "upload")
-            }
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Document
-          </Button>
-          <Button
-            variant={activeSection === "link" ? "default" : "outline"}
-            onClick={() =>
-              setActiveSection(activeSection === "link" ? null : "link")
-            }
-          >
-            <LinkIcon className="mr-2 h-4 w-4" />
-            Add Link
-          </Button>
-          <Button
-            variant={activeSection === "manual" ? "default" : "outline"}
-            onClick={() =>
-              setActiveSection(activeSection === "manual" ? null : "manual")
-            }
-          >
-            <PenLine className="mr-2 h-4 w-4" />
-            Add Entry
-          </Button>
-          <Button
-            variant={activeSection === "paste" ? "default" : "outline"}
-            onClick={() =>
-              setActiveSection(activeSection === "paste" ? null : "paste")
-            }
-          >
-            <ClipboardPaste className="mr-2 h-4 w-4" />
-            Paste & Parse
-          </Button>
-          {entries.length >= 2 && (
-            <Button
-              variant={activeSection === "merge" ? "default" : "outline"}
-              onClick={() =>
-                setActiveSection(activeSection === "merge" ? null : "merge")
-              }
-            >
-              <Merge className="mr-2 h-4 w-4" />
-              Merge Entries
-            </Button>
-          )}
+        <div className="flex gap-8">
+          {/* Left column — Profile entries */}
+          <div className="flex-1 min-w-0">
+            {/* Work Experience header with merge */}
+            {entries.length >= 2 && (
+              <div className="mb-4 flex items-center justify-between">
+                <div />
+                <button
+                  onClick={() => setActiveSection(activeSection === "merge" ? null : "merge")}
+                  className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--accent)]"
+                >
+                  <Merge size={13} />
+                  Merge Entries
+                </button>
+              </div>
+            )}
+
+            {activeSection === "merge" && (
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <MergeEntries
+                    entries={entries}
+                    chunks={chunks}
+                    onComplete={() => { loadData(); setActiveSection(null); }}
+                    onCancel={() => setActiveSection(null)}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+            <ProfileDisplay entries={entries} chunks={chunks} onUpdate={loadData} />
+          </div>
+
+          {/* Right column — Files & Links */}
+          <div className="w-[300px] flex-shrink-0">
+            <div className="sticky top-6">
+              {/* Add actions dropdown */}
+              <div className="relative mb-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setAddMenuOpen(!addMenuOpen)}
+                  className="w-full justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <Plus size={14} />
+                    Add to Profile
+                  </span>
+                  <ChevronDown size={14} className={`transition-transform ${addMenuOpen ? "rotate-180" : ""}`} />
+                </Button>
+                {addMenuOpen && (
+                  <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] py-1 shadow-lg">
+                    <button
+                      onClick={() => openSection("upload")}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                    >
+                      <Upload size={14} className="text-[var(--text-muted)]" />
+                      Upload Document
+                    </button>
+                    <button
+                      onClick={() => openSection("link")}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                    >
+                      <LinkIcon size={14} className="text-[var(--text-muted)]" />
+                      Add Link
+                    </button>
+                    <button
+                      onClick={() => openSection("paste")}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                    >
+                      <ClipboardPaste size={14} className="text-[var(--text-muted)]" />
+                      Paste & Parse
+                    </button>
+                    <button
+                      onClick={() => openSection("manual")}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
+                    >
+                      <PenLine size={14} className="text-[var(--text-muted)]" />
+                      Add Entry Manually
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Documents & URLs list */}
+              <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Active input section */}
-      {activeSection === "upload" && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <UploadDocuments
-              onComplete={() => {
-                loadData();
-                setActiveSection(null);
-                showSnackbar("Document uploaded — processing in background");
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-      {activeSection === "link" && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <AddLink
-              onComplete={() => {
-                loadData();
-                setActiveSection(null);
-                showSnackbar("URL added — scraping in background");
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-      {activeSection === "manual" && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <ManualEntry
-              onComplete={() => {
-                loadData();
-                setActiveSection(null);
-                showSnackbar("Entry added to profile");
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-      {activeSection === "paste" && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <PasteAndParse
-              onComplete={() => {
-                loadData();
-                setActiveSection(null);
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {activeSection === "merge" && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <MergeEntries
-              entries={entries}
-              chunks={chunks}
-              onComplete={() => {
-                loadData();
-                setActiveSection(null);
-              }}
-              onCancel={() => setActiveSection(null)}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Documents & URLs list */}
-      <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
-
-      {/* Profile display */}
-      <ProfileDisplay entries={entries} chunks={chunks} onUpdate={loadData} />
     </div>
   );
 }
