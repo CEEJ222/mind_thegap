@@ -10,6 +10,7 @@ import { UploadDocuments } from "@/components/profile/upload-documents";
 import { AddLink } from "@/components/profile/add-link";
 import { ManualEntry } from "@/components/profile/manual-entry";
 import { ProfileDisplay } from "@/components/profile/profile-display";
+import { DocumentsList } from "@/components/profile/documents-list";
 import {
   Upload,
   Link as LinkIcon,
@@ -206,6 +207,9 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Documents & URLs list */}
+      <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
 
       {/* Profile display */}
       <ProfileDisplay entries={entries} onUpdate={loadData} />
