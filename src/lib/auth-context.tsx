@@ -98,29 +98,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialized.current) return;
     initialized.current = true;
 
+    // Hard timeout — never spin forever
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
     supabase.auth.getUser()
       .then(({ data }: { data: { user: User | null } }) => {
         const currentUser = data.user;
         setUser(currentUser);
         if (currentUser) {
-          loadUserData(currentUser.id).then(() => setLoading(false)).catch(() => setLoading(false));
+          loadUserData(currentUser.id)
+            .then(() => { setLoading(false); clearTimeout(timeout); })
+            .catch(() => { setLoading(false); clearTimeout(timeout); });
         } else {
           setLoading(false);
+          clearTimeout(timeout);
         }
       })
       .catch(() => {
         setLoading(false);
+        clearTimeout(timeout);
       });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event: string, session: { user: User | null } | null) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        await loadUserData(currentUser.id);
+      try {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          await loadUserData(currentUser.id);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
