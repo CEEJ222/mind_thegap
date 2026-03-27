@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -69,11 +70,29 @@ export default function SettingsPage() {
     showSnackbar("Setting updated");
   }
 
-  // Debounced save for text inputs
-  function handleTextBlur(key: string, value: string) {
-    if (localSettings && value !== (localSettings[key] || "")) {
-      updateSetting(key, value);
+  const [saving, setSaving] = useState(false);
+
+  async function saveContactInfo() {
+    if (!localSettings) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("user_settings")
+      .update({
+        full_name: localSettings.full_name || null,
+        linkedin_url: localSettings.linkedin_url || null,
+        email: localSettings.email || null,
+        phone: localSettings.phone || null,
+        location: localSettings.location || null,
+      })
+      .eq("id", localSettings.id);
+
+    if (error) {
+      showSnackbar("Failed to save", "error");
+    } else {
+      await refreshSettings();
+      showSnackbar("Contact info saved");
     }
+    setSaving(false);
   }
 
   if (loading || !localSettings) {
@@ -103,7 +122,7 @@ export default function SettingsPage() {
               <Input
                 value={localSettings.full_name || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, full_name: e.target.value })}
-                onBlur={(e) => handleTextBlur("full_name", e.target.value)}
+
                 placeholder="C.J. Britz"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -114,7 +133,7 @@ export default function SettingsPage() {
                 type="email"
                 value={localSettings.email || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, email: e.target.value })}
-                onBlur={(e) => handleTextBlur("email", e.target.value)}
+
                 placeholder="you@example.com"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -125,7 +144,7 @@ export default function SettingsPage() {
                 type="tel"
                 value={localSettings.phone || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, phone: e.target.value })}
-                onBlur={(e) => handleTextBlur("phone", e.target.value)}
+
                 placeholder="805-428-7721"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -136,7 +155,7 @@ export default function SettingsPage() {
                 type="url"
                 value={localSettings.linkedin_url || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, linkedin_url: e.target.value })}
-                onBlur={(e) => handleTextBlur("linkedin_url", e.target.value)}
+
                 placeholder="https://linkedin.com/in/cjbritz"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -146,61 +165,57 @@ export default function SettingsPage() {
               <Input
                 value={localSettings.location || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, location: e.target.value })}
-                onBlur={(e) => handleTextBlur("location", e.target.value)}
+
                 placeholder="Los Angeles, CA"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
             </div>
+            <Button onClick={saveContactInfo} disabled={saving} className="mt-2">
+              {saving ? "Saving..." : "Save Contact Info"}
+            </Button>
           </CardContent>
         </Card>
 
-        {/* Resume Preferences */}
+        {/* Resume Output */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Output Format</CardTitle>
+            <CardTitle className="text-lg">Resume Output</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Select
-              value={localSettings.output_format}
-              onChange={(e) => updateSetting("output_format", e.target.value)}
-            >
-              <option value="pdf">PDF</option>
-              <option value="docx">Word Document (DOCX)</option>
-            </Select>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Include Summary Section</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select
-              value={localSettings.include_summary ? "yes" : "no"}
-              onChange={(e) =>
-                updateSetting("include_summary", e.target.value === "yes")
-              }
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </Select>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Resume Length</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select
-              value={localSettings.resume_length}
-              onChange={(e) => updateSetting("resume_length", e.target.value)}
-            >
-              <option value="1_page">Max 1 page</option>
-              <option value="1_5_pages">Max 1.5 pages</option>
-              <option value="2_pages">Max 2 pages</option>
-              <option value="no_max">No maximum</option>
-            </Select>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Output Format</label>
+              <Select
+                value={localSettings.output_format}
+                onChange={(e) => updateSetting("output_format", e.target.value)}
+              >
+                <option value="pdf">PDF</option>
+                <option value="docx">Word Document (DOCX)</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Include Summary Section</label>
+              <Select
+                value={localSettings.include_summary ? "yes" : "no"}
+                onChange={(e) =>
+                  updateSetting("include_summary", e.target.value === "yes")
+                }
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Resume Length</label>
+              <Select
+                value={localSettings.resume_length}
+                onChange={(e) => updateSetting("resume_length", e.target.value)}
+              >
+                <option value="1_page">Max 1 page</option>
+                <option value="1_5_pages">Max 1.5 pages</option>
+                <option value="2_pages">Max 2 pages</option>
+                <option value="no_max">No maximum</option>
+              </Select>
+            </div>
           </CardContent>
         </Card>
 
