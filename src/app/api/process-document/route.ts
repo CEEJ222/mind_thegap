@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
+import mammoth from "mammoth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,7 +42,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const text = await fileData.text();
+    // Extract text based on file type
+    let text: string;
+    const isDocx = file_name.toLowerCase().endsWith(".docx") ||
+      file_path.toLowerCase().endsWith(".docx");
+
+    if (isDocx) {
+      const arrayBuffer = await fileData.arrayBuffer();
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) });
+      text = result.value;
+    } else {
+      text = await fileData.text();
+    }
 
     const aiResponse = await chatCompletion({
       model: MODELS.EXTRACTION,
