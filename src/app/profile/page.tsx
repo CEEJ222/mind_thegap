@@ -9,12 +9,14 @@ import { showSnackbar } from "@/components/ui/snackbar";
 import { UploadDocuments } from "@/components/profile/upload-documents";
 import { AddLink } from "@/components/profile/add-link";
 import { ManualEntry } from "@/components/profile/manual-entry";
+import { PasteAndParse } from "@/components/profile/paste-and-parse";
 import { ProfileDisplay } from "@/components/profile/profile-display";
 import { DocumentsList } from "@/components/profile/documents-list";
 import {
   Upload,
   Link as LinkIcon,
   PenLine,
+  ClipboardPaste,
   CheckCircle2,
   FileText,
   Globe,
@@ -33,7 +35,7 @@ export default function ProfilePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [urls, setUrls] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState<
-    "upload" | "link" | "manual" | null
+    "upload" | "link" | "manual" | "paste" | null
   >(null);
   const [loading, setLoading] = useState(true);
 
@@ -171,6 +173,15 @@ export default function ProfilePage() {
             <PenLine className="mr-2 h-4 w-4" />
             Add Entry
           </Button>
+          <Button
+            variant={activeSection === "paste" ? "default" : "outline"}
+            onClick={() =>
+              setActiveSection(activeSection === "paste" ? null : "paste")
+            }
+          >
+            <ClipboardPaste className="mr-2 h-4 w-4" />
+            Paste & Parse
+          </Button>
         </div>
       )}
 
@@ -209,6 +220,18 @@ export default function ProfilePage() {
                 loadData();
                 setActiveSection(null);
                 showSnackbar("Entry added to profile");
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+      {activeSection === "paste" && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <PasteAndParse
+              onComplete={() => {
+                loadData();
+                setActiveSection(null);
               }}
             />
           </CardContent>

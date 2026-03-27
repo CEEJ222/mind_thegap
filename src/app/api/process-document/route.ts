@@ -7,64 +7,74 @@ export async function POST(request: NextRequest) {
   try {
     const docBody = await request.json();
     const user_id = docBody.user_id as string;
-    const file_path = docBody.file_path as string;
-    const file_name = docBody.file_name as string;
+    const file_path = docBody.file_path as string | undefined;
+    const file_name = docBody.file_name as string | undefined;
     const document_id = docBody.document_id as string | undefined;
+    const pasted_text = docBody.pasted_text as string | undefined;
 
-    if (!user_id || !file_path) {
+    if (!user_id || (!file_path && !pasted_text)) {
       return NextResponse.json(
-        { error: "Missing user_id or file_path" },
+        { error: "Missing user_id or content" },
         { status: 400 }
       );
     }
 
     const supabase = createServiceClient();
 
-    // Get the document ID if not passed
-    let docId = document_id;
-    if (!docId) {
-      const { data: doc } = await supabase
-        .from("uploaded_documents")
-        .select("id")
-        .eq("file_path", file_path)
-        .single();
-      docId = doc?.id;
-    }
-
-    await supabase
-      .from("uploaded_documents")
-      .update({ processing_status: "processing" })
-      .eq("file_path", file_path);
-
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("documents")
-      .download(file_path);
-
-    if (downloadError || !fileData) {
-      await supabase
-        .from("uploaded_documents")
-        .update({
-          processing_status: "failed",
-          error_message: "Failed to download file",
-        })
-        .eq("file_path", file_path);
-      return NextResponse.json(
-        { error: "Failed to download file" },
-        { status: 500 }
-      );
-    }
-
-    // Extract text based on file type
     let text: string;
-    const isDocx = file_name.toLowerCase().endsWith(".docx") ||
-      file_path.toLowerCase().endsWith(".docx");
+    let docId = document_id;
 
-    if (isDocx) {
-      const arrayBuffer = await fileData.arrayBuffer();
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) });
-      text = result.value;
+    if (pasted_text) {
+      // Paste & Parse mode — text provided directly, no file
+      text = pasted_text;
     } else {
-      text = await fileData.text();
+      // File upload mode
+      if (!docId && file_path) {
+        const { data: doc } = await supabase
+          .from("uploaded_documents")
+          .select("id")
+          .eq("file_path", file_path)
+          .single();
+        docId = doc?.id;
+      }
+
+      if (file_path) {
+        await supabase
+          .from("uploaded_documents")
+          .update({ processing_status: "processing" })
+          .eq("file_path", file_path);
+      }
+
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("documents")
+        .download(file_path!);
+
+      if (downloadError || !fileData) {
+        if (file_path) {
+          await supabase
+            .from("uploaded_documents")
+            .update({
+              processing_status: "failed",
+              error_message: "Failed to download file",
+            })
+            .eq("file_path", file_path);
+        }
+        return NextResponse.json(
+          { error: "Failed to download file" },
+          { status: 500 }
+        );
+      }
+
+      const isDocx = (file_name || "").toLowerCase().endsWith(".docx") ||
+        (file_path || "").toLowerCase().endsWith(".docx");
+
+      if (isDocx) {
+        const arrayBuffer = await fileData.arrayBuffer();
+        const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) });
+        text = result.value;
+      } else {
+        text = await fileData.text();
+      }
     }
 
     const aiResponse = await chatCompletion({
@@ -190,10 +200,12 @@ Return ONLY valid JSON.`,
       }
     }
 
-    await supabase
-      .from("uploaded_documents")
-      .update({ processing_status: "completed" })
-      .eq("file_path", file_path);
+    if (file_path) {
+      await supabase
+        .from("uploaded_documents")
+        .update({ processing_status: "completed" })
+        .eq("file_path", file_path);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
