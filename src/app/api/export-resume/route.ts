@@ -5,24 +5,83 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
   AlignmentType,
   BorderStyle,
+  TabStopType,
+  TabStopPosition,
 } from "docx";
 
-// Parse markdown-ish resume content into docx paragraphs
+const BLUE = "1F4E79";
+const BLACK = "1C1C1E";
+const GRAY = "666666";
+
 function markdownToDocxParagraphs(content: string): Paragraph[] {
   const lines = content.split("\n");
   const paragraphs: Paragraph[] = [];
+  let isFirstLine = true;
 
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Skip empty lines but add small spacing
     if (!trimmed) {
-      paragraphs.push(new Paragraph({ text: "" }));
+      paragraphs.push(new Paragraph({ spacing: { after: 40 } }));
       continue;
     }
 
-    // H1: # Header
+    // First line = contact header (Name | email | phone | etc.)
+    if (isFirstLine) {
+      isFirstLine = false;
+      // Check if it looks like a contact header (contains | separators)
+      if (trimmed.includes("|")) {
+        const parts = trimmed.split("|").map((p) => p.trim());
+        const name = parts[0] || "";
+        const rest = parts.slice(1).join("  |  ");
+
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: name,
+                bold: true,
+                size: 28,
+                font: "Calibri",
+                color: BLACK,
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 40 },
+          })
+        );
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: rest,
+                size: 18,
+                font: "Calibri",
+                color: GRAY,
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 120 },
+          })
+        );
+        // Add a thin line separator
+        paragraphs.push(
+          new Paragraph({
+            border: {
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+            },
+            spacing: { after: 120 },
+          })
+        );
+        continue;
+      }
+      // If not a contact header, treat as H1
+    }
+
+    // H1: # Header — Section titles (SUMMARY, EXPERIENCE, SKILLS)
     if (trimmed.startsWith("# ") && !trimmed.startsWith("## ")) {
       paragraphs.push(
         new Paragraph({
@@ -30,19 +89,21 @@ function markdownToDocxParagraphs(content: string): Paragraph[] {
             new TextRun({
               text: trimmed.replace(/^#\s+/, ""),
               bold: true,
-              size: 28,
+              size: 24,
               font: "Calibri",
+              color: BLUE,
             }),
           ],
-          heading: HeadingLevel.HEADING_1,
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 100 },
+          spacing: { before: 240, after: 80 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: BLUE },
+          },
         })
       );
       continue;
     }
 
-    // H2: ## Header
+    // H2: ## Header — Section titles (alternative)
     if (trimmed.startsWith("## ")) {
       paragraphs.push(
         new Paragraph({
@@ -50,60 +111,98 @@ function markdownToDocxParagraphs(content: string): Paragraph[] {
             new TextRun({
               text: trimmed.replace(/^##\s+/, ""),
               bold: true,
-              size: 22,
+              size: 24,
               font: "Calibri",
-              color: "1C1C1E",
+              color: BLUE,
             }),
           ],
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 200, after: 80 },
+          spacing: { before: 240, after: 80 },
           border: {
-            bottom: {
-              style: BorderStyle.SINGLE,
-              size: 1,
-              color: "CCCCCC",
-            },
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: BLUE },
           },
         })
       );
       continue;
     }
 
-    // H3: ### Header
+    // H3: ### Header — Job titles (Company | Role | Dates)
     if (trimmed.startsWith("### ")) {
+      const text = trimmed.replace(/^###\s+/, "");
       paragraphs.push(
         new Paragraph({
           children: [
             new TextRun({
-              text: trimmed.replace(/^###\s+/, ""),
+              text,
               bold: true,
               size: 20,
               font: "Calibri",
+              color: BLUE,
             }),
           ],
-          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 160, after: 40 },
+        })
+      );
+      continue;
+    }
+
+    // H4: #### Header
+    if (trimmed.startsWith("#### ")) {
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: trimmed.replace(/^####\s+/, ""),
+              bold: true,
+              size: 20,
+              font: "Calibri",
+              color: BLACK,
+            }),
+          ],
           spacing: { before: 120, after: 40 },
         })
       );
       continue;
     }
 
-    // Bullet points: - item or * item or • item
+    // Bullet points
     if (/^[-*•]\s/.test(trimmed)) {
       const bulletText = trimmed.replace(/^[-*•]\s+/, "");
-      // Handle **bold** within bullets
       const runs = parseBoldText(bulletText);
       paragraphs.push(
         new Paragraph({
           children: runs,
           bullet: { level: 0 },
-          spacing: { after: 40 },
+          spacing: { after: 30 },
         })
       );
       continue;
     }
 
-    // Regular text — handle **bold**
+    // Lines that look like job titles: "Role | Company | Dates" or "**Role** | Company"
+    if (trimmed.includes("|") && !trimmed.startsWith("#")) {
+      const runs = parseBoldText(trimmed);
+      paragraphs.push(
+        new Paragraph({
+          children: runs.map((r) => {
+            // Make the whole line bold and blue if it looks like a job header
+            if (!trimmed.startsWith("*")) {
+              return new TextRun({
+                text: r.text || "",
+                bold: true,
+                size: 20,
+                font: "Calibri",
+                color: BLUE,
+              });
+            }
+            return r;
+          }),
+          spacing: { before: 160, after: 40 },
+        })
+      );
+      continue;
+    }
+
+    // Regular text
     const runs = parseBoldText(trimmed);
     paragraphs.push(
       new Paragraph({
@@ -116,7 +215,6 @@ function markdownToDocxParagraphs(content: string): Paragraph[] {
   return paragraphs;
 }
 
-// Parse **bold** markers into TextRun arrays
 function parseBoldText(text: string): TextRun[] {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts
@@ -128,12 +226,14 @@ function parseBoldText(text: string): TextRun[] {
           bold: true,
           size: 20,
           font: "Calibri",
+          color: BLACK,
         });
       }
       return new TextRun({
         text: part,
         size: 20,
         font: "Calibri",
+        color: BLACK,
       });
     });
 }
@@ -151,7 +251,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Try getting resume content from the database first (most reliable)
+    // Try getting resume content from the database first
     let markdownContent = "";
 
     const { data: resumeRecords, error: dbError } = await supabase
@@ -162,13 +262,6 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     const resumeRecord = resumeRecords?.[0];
-
-    console.log("Export DB lookup:", {
-      file_path,
-      found: !!resumeRecord,
-      dbError: dbError?.message,
-      hasContent: !!resumeRecord?.editorial_notes?.resume_content,
-    });
 
     // editorial_notes may come back as a string or object
     let notes = resumeRecord?.editorial_notes;
@@ -200,9 +293,9 @@ export async function POST(request: NextRequest) {
             properties: {
               page: {
                 margin: {
-                  top: 720, // 0.5 inch
+                  top: 720,
                   bottom: 720,
-                  left: 1080, // 0.75 inch
+                  left: 1080,
                   right: 1080,
                 },
               },
@@ -223,8 +316,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // PDF fallback: return markdown as text for now
-    // Full PDF generation would need puppeteer or similar
     return new NextResponse(markdownContent, {
       status: 200,
       headers: {
