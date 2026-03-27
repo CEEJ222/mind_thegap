@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             jobTitle={topNavData.jobTitle}
             fitScore={topNavData.fitScore}
           />
-          <main className="relative flex-1 overflow-y-auto px-9 py-6">
+          <main className="relative flex-1 overflow-y-auto px-4 pt-14 pb-4 md:px-9 md:pt-6 md:pb-6">
             {children}
           </main>
         </div>
