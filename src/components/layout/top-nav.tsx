@@ -8,7 +8,7 @@ export function TopNav() {
   const { user } = useAuth();
 
   return (
-    <header className="flex h-14 items-center justify-end border-b border-border bg-card px-6">
+    <header className="flex h-14 items-center justify-end border-b border-border bg-background px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/settings"

@@ -25,12 +25,12 @@ const navItems = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const { signOut, hasProfile } = useAuth();
+  const { signOut } = useAuth();
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-border bg-card transition-all duration-200",
+        "flex flex-col border-r border-border bg-background transition-all duration-200",
         collapsed ? "w-16" : "w-60"
       )}
     >
@@ -51,27 +51,20 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 px-2 py-4">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
-          const isLocked = item.href === "/generate" && !hasProfile;
 
           return (
             <Link
               key={item.href}
-              href={isLocked ? "/profile" : item.href}
+              href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-accent/10 text-accent"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                isLocked && "opacity-50"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <item.icon size={18} />
-              {!collapsed && (
-                <span>
-                  {item.label}
-                  {isLocked && " (locked)"}
-                </span>
-              )}
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}

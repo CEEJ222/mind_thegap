@@ -5,13 +5,22 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import type { Database } from "@/lib/types/database";
 
-type UserSettings = Database["public"]["Tables"]["user_settings"]["Row"];
+interface UserSettings {
+  id: string;
+  user_id: string;
+  output_format: string;
+  include_summary: boolean;
+  resume_length: string;
+  theme: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -37,6 +46,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
   const supabase = createClient();
+  const initialized = useRef(false);
+
+  async function loadUserData(userId: string) {
+    const [settingsRes, profileRes] = await Promise.all([
+      supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .single(),
+      supabase
+        .from("profile_entries")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId),
+    ]);
+
+    if (settingsRes.data) setSettings(settingsRes.data as UserSettings);
+    setHasProfile((profileRes.count ?? 0) > 0);
+  }
 
   async function refreshSettings() {
     if (!user) return;
@@ -45,15 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("user_id", user.id)
       .single();
-    if (data) setSettings(data);
-  }
-
-  async function checkProfile(userId: string) {
-    const { count } = await supabase
-      .from("profile_entries")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
-    setHasProfile((count ?? 0) > 0);
+    if (data) setSettings(data as UserSettings);
   }
 
   async function signOut() {
@@ -64,14 +83,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    // Check initial session
+    supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => {
+      const currentUser = data.user;
+      setUser(currentUser);
+      if (currentUser) {
+        loadUserData(currentUser.id).then(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event: string, session: { user: User | null } | null) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        await refreshSettings();
-        await checkProfile(currentUser.id);
+        await loadUserData(currentUser.id);
       }
       setLoading(false);
     });
