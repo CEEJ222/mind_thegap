@@ -31,7 +31,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings) {
-      setLocalSettings(settings as Settings);
+      setLocalSettings(settings as unknown as Settings);
       setLoading(false);
       return;
     }

@@ -34,7 +34,7 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
       .select("avatar_url")
       .eq("id", user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: { data: { avatar_url: string | null } | null }) => {
         if (data?.avatar_url) setAvatarUrl(data.avatar_url);
       });
   }
