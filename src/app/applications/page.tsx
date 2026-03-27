@@ -166,14 +166,14 @@ export default function ApplicationsPage() {
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--text-faint)]">
                       {new Date(app.created_at).toLocaleDateString()}
                     </span>
                     <Select
                       value={app.interview_converted}
                       onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
-                      className="h-7 text-xs w-24"
+                      className="h-7 text-xs w-28"
                     >
                       <option value="pending">Pending</option>
                       <option value="yes">Interview</option>

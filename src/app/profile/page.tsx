@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,6 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const isInitialLoad = useRef(true);
 
   async function regenerateSummary() {
     if (!user) return;
@@ -105,11 +104,6 @@ export default function ProfilePage() {
     if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
     setLoading(false);
     refreshProfile();
-
-    if (!isInitialLoad.current && (entriesRes.data?.length ?? 0) > 0) {
-      regenerateSummary();
-    }
-    isInitialLoad.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);
 
