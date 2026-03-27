@@ -68,10 +68,10 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Extract information from this URL to enrich a profile entry.
+          content: `Extract company/project information from this URL to enrich a profile entry.
 
 ## Profile Entry
-Company: ${entry.company_name}
+Company/Project: ${entry.company_name}
 Title: ${entry.job_title}
 Type: ${entry.entry_type}
 
@@ -79,19 +79,18 @@ Type: ${entry.entry_type}
 ${scrapedContent.slice(0, 6000)}
 
 ## Instructions
-Extract any of the following that can be determined from the URL content:
-1. industry — what industry is this company/project in?
-2. domain — what business domain? (e.g. SaaS, Mobile, Healthcare, eCommerce)
-3. additional_bullets — any new achievements, features, or details about this role/project that aren't obvious from a resume. Extract as specific bullet points.
+Extract the following from the URL content:
+1. company_description — A concise 1-2 sentence description of what this company or project IS and DOES. This should explain the business to someone who has never heard of it. For example: "Mobile-first telecommunications platform providing affordable wireless service to 2M+ subscribers through government subsidy programs." Do NOT describe what the person did there — describe what the company/project itself is.
+2. industry — what industry? (e.g. Telecommunications, Healthcare, SaaS, etc.)
+3. domain — what business domain? (e.g. Mobile, Enterprise, Consumer, B2B, eCommerce, etc.)
 
 Return JSON only:
 {
+  "company_description": "string or null",
   "industry": "string or null",
-  "domain": "string or null",
-  "additional_bullets": ["bullet 1", "bullet 2"]
+  "domain": "string or null"
 }
 
-If nothing useful can be extracted, return {"industry": null, "domain": null, "additional_bullets": []}.
 Return ONLY valid JSON.`,
         },
       ],
@@ -99,8 +98,9 @@ Return ONLY valid JSON.`,
 
     const enrichment = JSON.parse(response);
 
-    // Update entry metadata
+    // Update entry metadata and description
     const updates: Record<string, string> = {};
+    if (enrichment.company_description) updates.company_description = enrichment.company_description;
     if (enrichment.industry && !entry.industry) updates.industry = enrichment.industry;
     if (enrichment.domain && !entry.domain) updates.domain = enrichment.domain;
 
@@ -111,41 +111,11 @@ Return ONLY valid JSON.`,
         .eq("id", entry_id);
     }
 
-    // Add new bullets as chunks (with dedup)
-    if (enrichment.additional_bullets?.length > 0) {
-      const { data: existingChunks } = await supabase
-        .from("profile_chunks")
-        .select("chunk_text")
-        .eq("entry_id", entry_id);
-
-      const existingTexts = new Set(
-        (existingChunks ?? []).map((c: Record<string, string>) =>
-          c.chunk_text.toLowerCase().trim()
-        )
-      );
-
-      for (const bullet of enrichment.additional_bullets) {
-        if (!existingTexts.has(bullet.toLowerCase().trim())) {
-          await supabase.from("profile_chunks").insert({
-            user_id: entry.user_id,
-            entry_id,
-            chunk_text: bullet,
-            company_name: entry.company_name,
-            job_title: entry.job_title,
-            date_start: entry.date_start,
-            date_end: entry.date_end,
-            entry_type: entry.entry_type,
-            source: "url_scrape",
-          });
-        }
-      }
-    }
-
     return NextResponse.json({
       success: true,
+      company_description: enrichment.company_description,
       industry: enrichment.industry,
       domain: enrichment.domain,
-      bullets_added: enrichment.additional_bullets?.length ?? 0,
     });
   } catch (err) {
     console.error("Enrich entry error:", err);

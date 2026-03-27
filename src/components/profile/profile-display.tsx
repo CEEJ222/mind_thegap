@@ -66,6 +66,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
     setEditData({
       company_name: entry.company_name ?? "",
       job_title: entry.job_title ?? "",
+      company_description: entry.company_description ?? "",
       date_start: entry.date_start ?? "",
       date_end: entry.date_end ?? "",
     });
@@ -79,6 +80,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
       .update({
         company_name: editData.company_name || null,
         job_title: editData.job_title || null,
+        company_description: editData.company_description || null,
         date_start: editData.date_start || null,
         date_end: editData.date_end || null,
         user_confirmed: true,
@@ -219,6 +221,19 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                       />
                     </div>
 
+                    {/* Company description */}
+                    <div>
+                      <label className="mb-1 block text-[11px] text-[var(--text-muted)]">Company/Project Description</label>
+                      <Input
+                        value={editData.company_description}
+                        onChange={(e) =>
+                          setEditData({ ...editData, company_description: e.target.value })
+                        }
+                        placeholder="What does this company or project do? (1-2 sentences)"
+                        className="border-[var(--border-input)] bg-[var(--bg-card)] text-sm"
+                      />
+                    </div>
+
                     {/* Dates */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -316,6 +331,12 @@ export function ProfileDisplay({ entries, chunks, onUpdate }: Props) {
                       <p className="text-xs text-[var(--text-faint)]">
                         {formatDate(entry.date_start)} —{" "}
                         {formatDate(entry.date_end)}
+                      </p>
+                    )}
+                    {/* Company/project description */}
+                    {entry.company_description && (
+                      <p className="mt-1.5 text-xs italic text-[var(--text-muted)]">
+                        {entry.company_description}
                       </p>
                     )}
                     {/* Bullet points from chunks */}
