@@ -22,6 +22,22 @@ interface OpenRouterOptions {
   temperature?: number;
 }
 
+/**
+ * Extract JSON from a response that may contain markdown fences or extra text.
+ */
+function extractJSON(text: string): string {
+  // Try to find JSON inside markdown code fences
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  // Try to find a JSON object or array
+  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jsonMatch) return jsonMatch[1].trim();
+
+  // Return as-is and let JSON.parse handle the error
+  return text.trim();
+}
+
 export async function chatCompletion(options: OpenRouterOptions): Promise<string> {
   const res = await fetch(OPENROUTER_API_URL, {
     method: "POST",
@@ -45,5 +61,6 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
   }
 
   const data = await res.json();
-  return data.choices[0].message.content;
+  const raw = data.choices[0].message.content;
+  return extractJSON(raw);
 }
