@@ -86,8 +86,8 @@ export default function ApplicationsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {/* Header */}
-          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+          {/* Desktop header */}
+          <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
             <div className="col-span-4">Company & Role</div>
             <div className="col-span-2">Date</div>
             <div className="col-span-2 text-center">Fit Score</div>
@@ -101,7 +101,8 @@ export default function ApplicationsPage() {
               className="cursor-pointer transition-colors hover:bg-muted/50"
               onClick={() => setSelectedId(app.id)}
             >
-              <CardContent className="grid grid-cols-12 items-center gap-4 p-4">
+              {/* Desktop row */}
+              <CardContent className="hidden md:grid grid-cols-12 items-center gap-4 p-4">
                 <div className="col-span-4">
                   <div className="font-medium">
                     {app.company_name || "Unknown Company"}
@@ -115,30 +116,17 @@ export default function ApplicationsPage() {
                 </div>
                 <div className="col-span-2 text-center">
                   {app.fit_score !== null ? (
-                    <span
-                      className={cn(
-                        "text-lg font-bold",
-                        getFitScoreColor(app.fit_score)
-                      )}
-                    >
+                    <span className={cn("text-lg font-bold", getFitScoreColor(app.fit_score))}>
                       {app.fit_score}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
                 </div>
-                <div
-                  className="col-span-2 text-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="col-span-2 text-center" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={app.interview_converted}
-                    onChange={(e) =>
-                      handleStatusChange(
-                        app.id,
-                        e.target.value as InterviewStatus
-                      )
-                    }
+                    onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
                     className="h-8 text-xs"
                   >
                     <option value="pending">Pending</option>
@@ -146,34 +134,59 @@ export default function ApplicationsPage() {
                     <option value="no">Rejected</option>
                   </Select>
                 </div>
-                <div
-                  className="col-span-2 flex items-center justify-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="col-span-2 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                   {deletingId === app.id ? (
                     <>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDelete(app.id)}
-                        className="h-7 px-2 text-xs"
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeletingId(null)}
-                        className="h-7 px-2 text-xs"
-                      >
-                        Cancel
-                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Confirm</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
                     </>
                   ) : (
-                    <button
-                      onClick={() => setDeletingId(app.id)}
-                      className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]"
+                    <button onClick={() => setDeletingId(app.id)} className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </CardContent>
+
+              {/* Mobile card */}
+              <CardContent className="md:hidden p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-semibold text-[var(--text-primary)]">
+                      {app.company_name || "Unknown Company"}
+                    </div>
+                    <div className="text-sm text-[var(--text-muted)]">
+                      {app.job_title || "Unknown Role"}
+                    </div>
+                  </div>
+                  {app.fit_score !== null && (
+                    <span className={cn("text-2xl font-bold", getFitScoreColor(app.fit_score))}>
+                      {app.fit_score}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--text-faint)]">
+                      {new Date(app.created_at).toLocaleDateString()}
+                    </span>
+                    <Select
+                      value={app.interview_converted}
+                      onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
+                      className="h-7 text-xs w-24"
                     >
+                      <option value="pending">Pending</option>
+                      <option value="yes">Interview</option>
+                      <option value="no">Rejected</option>
+                    </Select>
+                  </div>
+                  {deletingId === app.id ? (
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Delete</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDeletingId(app.id)} className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
                       <Trash2 size={14} />
                     </button>
                   )}
