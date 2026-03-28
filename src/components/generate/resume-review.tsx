@@ -77,7 +77,7 @@ export function ResumeReview({
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Resume Ready</h1>
+        <h1 className="text-xl font-bold md:text-2xl">Resume Ready</h1>
         <p className="text-muted-foreground">
           {analysis.company_name} — {analysis.job_title}
         </p>

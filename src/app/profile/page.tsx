@@ -113,7 +113,7 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto max-w-6xl">
       {/* Profile header with avatar */}
-      <div className="mb-6 flex items-center gap-5">
+      <div className="mb-6 flex items-center gap-3 md:gap-5">
         <AvatarUpload
           fullName={user?.user_metadata?.full_name || user?.email || "User"}
           avatarUrl={avatarUrl}
@@ -157,7 +157,7 @@ export default function ProfilePage() {
 
       {/* Onboarding for new users */}
       {isNewUser && !activeSection && (
-        <div className="mb-10 grid gap-4 md:grid-cols-4">
+        <div className="mb-10 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           {[
             { key: "upload" as const, icon: FileText, title: "Upload a Document", description: "Resume, project write-up, performance review, or certification", done: hasDocuments },
             { key: "link" as const, icon: Globe, title: "Add a Link", description: "Personal website, portfolio, or project URL", done: hasLinks },
@@ -167,14 +167,14 @@ export default function ProfilePage() {
             <button
               key={item.key}
               onClick={() => setActiveSection(item.key)}
-              className="group relative flex flex-col items-center rounded-lg border-2 border-dashed border-border bg-card p-8 text-center transition-all hover:border-accent hover:shadow-md"
+              className="group relative flex flex-col items-center rounded-lg border-2 border-dashed border-border bg-card p-4 text-center transition-all hover:border-accent hover:shadow-md md:p-8"
             >
               {item.done && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-accent" />}
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 transition-colors group-hover:bg-accent/20">
-                <item.icon className="h-7 w-7 text-accent" />
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 transition-colors group-hover:bg-accent/20 md:mb-4 md:h-14 md:w-14">
+                <item.icon className="h-5 w-5 text-accent md:h-7 md:w-7" />
               </div>
-              <h3 className="mb-1 font-semibold">{item.title}</h3>
-              <p className="text-sm text-muted-foreground">{item.description}</p>
+              <h3 className="mb-1 text-sm font-semibold md:text-base">{item.title}</h3>
+              <p className="text-xs text-muted-foreground md:text-sm">{item.description}</p>
             </button>
           ))}
         </div>

@@ -221,7 +221,7 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
   }
 
   return (
-    <div className="relative px-9 pb-[100px] pt-6">
+    <div className="relative px-4 pb-4 pt-4 md:px-9 md:pt-6 md:pb-6">
       {/* Progress bar */}
       <div className="mb-6">
         <div className="mb-1.5 flex items-center justify-between text-[11px]">
@@ -263,10 +263,10 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
                 onClick={() => setExpandedTheme(isExpanded ? null : theme.id)}
               >
                 <StatusIcon tier={theme.score_tier} />
-                <span className="flex-1 text-[13px] font-semibold text-[var(--text-primary)]">
+                <span className="min-w-0 flex-1 text-[13px] font-semibold text-[var(--text-primary)]">
                   {theme.theme_name}
                 </span>
-                <span className={`text-[11px] font-medium ${status.className}`}>
+                <span className={`hidden sm:inline text-[11px] font-medium ${status.className}`}>
                   {status.label}
                 </span>
                 {theme.score_tier !== "strong" && (
@@ -364,7 +364,7 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
       </div>
 
       {/* Generate Resume FAB */}
-      <div className="absolute bottom-6 right-9 flex flex-col items-end gap-1">
+      <div className="sticky bottom-0 -mx-4 mt-6 border-t border-[var(--border-subtle)] bg-[var(--bg-base)]/95 px-4 py-3 backdrop-blur-sm md:-mx-9 md:border-t-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none md:absolute md:bottom-6 md:right-9 md:left-auto md:mt-0 flex flex-col items-center gap-1 md:items-end">
         <span className="text-[11px] text-[var(--text-muted)]">
           Score: {currentFitScore} · {gapsRemaining} gap{gapsRemaining !== 1 ? "s" : ""} remaining
         </span>
@@ -372,6 +372,7 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
           variant="fab"
           onClick={onGenerate}
           disabled={generating}
+          className="w-full md:w-auto"
         >
           {generating ? (
             <>
