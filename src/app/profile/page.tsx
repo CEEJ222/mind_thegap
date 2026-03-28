@@ -40,7 +40,6 @@ export default function ProfilePage() {
   const [activeSection, setActiveSection] = useState<
     "upload" | "link" | "manual" | "paste" | "merge" | null
   >(null);
-  const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -99,7 +98,6 @@ export default function ProfilePage() {
     if (urlsRes.data) setUrls(urlsRes.data);
     if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
     if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
-    setLoading(false);
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);
@@ -116,14 +114,6 @@ export default function ProfilePage() {
   function openSection(section: "upload" | "link" | "manual" | "paste") {
     setActiveSection(section);
     setAddMenuOpen(false);
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      </div>
-    );
   }
 
   return (
@@ -212,6 +202,14 @@ export default function ProfilePage() {
             {activeSection === "paste" && (
               <PasteAndParse onComplete={() => { loadData(); setActiveSection(null); }} />
             )}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setActiveSection(null)}
+                className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                Cancel
+              </button>
+            </div>
           </CardContent>
         </Card>
       )}
