@@ -48,13 +48,13 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 md:px-9">
-      <div>
+      <div className="min-w-0 flex-1">
         {companyName && (
           <>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            <div className="truncate text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
               {companyName}
             </div>
-            <div className="text-base font-bold text-[var(--text-primary)]">
+            <div className="truncate text-sm font-bold text-[var(--text-primary)] md:text-base">
               {jobTitle}
             </div>
           </>
@@ -67,11 +67,11 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
           >
-            <span className="text-[28px] font-extrabold text-[var(--accent)]">
+            <span className="text-xl font-extrabold text-[var(--accent)] md:text-[28px]">
               {fitScore}
             </span>
             {showTooltip && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-[10px] bg-[#1C1C1E] p-4 text-xs text-white shadow-lg">
+              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-[10px] bg-[#1C1C1E] p-3 text-xs text-white shadow-lg md:w-64 md:p-4">
                 <p className="mb-1 font-semibold">Fit Score</p>
                 <p className="text-white/70">
                   Weighted average of all theme scores. Themes are weighted by JD

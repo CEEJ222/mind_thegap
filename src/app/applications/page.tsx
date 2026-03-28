@@ -150,41 +150,41 @@ export default function ApplicationsPage() {
 
               {/* Mobile card */}
               <CardContent className="md:hidden p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="font-semibold text-[var(--text-primary)]">
+                <div className="flex items-start justify-between mb-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-[var(--text-primary)] truncate">
                       {app.company_name || "Unknown Company"}
                     </div>
-                    <div className="text-sm text-[var(--text-muted)]">
+                    <div className="text-sm text-[var(--text-muted)] truncate">
                       {app.job_title || "Unknown Role"}
+                    </div>
+                    <div className="text-xs text-[var(--text-faint)] mt-0.5">
+                      {new Date(app.created_at).toLocaleDateString()}
                     </div>
                   </div>
                   {app.fit_score !== null && (
-                    <span className={cn("text-2xl font-bold", getFitScoreColor(app.fit_score))}>
+                    <span className={cn("text-2xl font-bold flex-shrink-0 ml-3", getFitScoreColor(app.fit_score))}>
                       {app.fit_score}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 mt-3" onClick={(e) => e.stopPropagation()}>
-                  <span className="text-xs text-[var(--text-faint)] flex-shrink-0">
-                    {new Date(app.created_at).toLocaleDateString()}
-                  </span>
+                <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={app.interview_converted}
                     onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
-                    className="h-7 text-xs flex-1 min-w-0"
+                    className="h-auto py-1.5 text-xs leading-normal flex-1 min-w-0"
                   >
                     <option value="pending">Pending</option>
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
                   </Select>
                   {deletingId === app.id ? (
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Delete</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-8 px-2 text-xs">Delete</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-8 px-2 text-xs">Cancel</Button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeletingId(app.id)} className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
+                    <button onClick={() => setDeletingId(app.id)} className="flex-shrink-0 rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
                       <Trash2 size={14} />
                     </button>
                   )}
