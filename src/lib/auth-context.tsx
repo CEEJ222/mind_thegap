@@ -30,7 +30,7 @@ interface AuthContextType {
   hasProfile: boolean;
   refreshSettings: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -40,7 +40,7 @@ const AuthContext = createContext<AuthContextType>({
   hasProfile: false,
   refreshSettings: async () => {},
   refreshProfile: async () => {},
-  signOut: async () => {},
+  signOut: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -87,20 +87,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasProfile((count ?? 0) > 0);
   }, [user, supabase]);
 
-  async function signOut() {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // ignore — redirect anyway
-    }
-    setUser(null);
-    setSettings(null);
-    setHasProfile(false);
-    // Force hard redirect regardless
+  function signOut() {
+    // Nuke cookies immediately — don't wait for anything
     document.cookie.split(";").forEach((c) => {
-      document.cookie = c.trim().split("=")[0] + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      const name = c.trim().split("=")[0];
+      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
+      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=." + window.location.hostname;
     });
-    window.location.replace("/");
+    // Clear localStorage too (Supabase sometimes stores tokens there)
+    try { localStorage.clear(); } catch { /* ignore */ }
+    // Fire and forget the API call
+    supabase.auth.signOut().catch(() => {});
+    // Redirect immediately
+    window.location.replace("/auth/login");
   }
 
   useEffect(() => {
