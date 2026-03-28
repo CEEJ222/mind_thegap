@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { showSnackbar } from "@/components/ui/snackbar";
+import { Key, Loader2, Trash2, ExternalLink } from "lucide-react";
 
 interface Settings {
   id: string;
@@ -23,11 +24,24 @@ interface Settings {
   [key: string]: string | boolean;
 }
 
+interface ApiKeyInfo {
+  key_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function SettingsPage() {
   const { user, settings, refreshSettings } = useAuth();
   const supabase = createClient();
   const [localSettings, setLocalSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
+  const [apifyKey, setApifyKey] = useState("");
+  const [openrouterKey, setOpenrouterKey] = useState("");
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -52,6 +66,67 @@ export default function SettingsPage() {
       })();
     }
   }, [user, settings, supabase]);
+
+  // Load API keys
+  useEffect(() => {
+    loadApiKeys();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadApiKeys() {
+    try {
+      const res = await fetch("/api/user-api-keys");
+      const data = await res.json();
+      if (data.keys) setApiKeys(data.keys);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function saveApiKey(keyType: string, value: string) {
+    if (!value.trim()) return;
+    setSavingKey(keyType);
+
+    try {
+      const res = await fetch("/api/user-api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key_type: keyType, api_key: value.trim() }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save");
+
+      if (keyType === "apify") setApifyKey("");
+      else setOpenrouterKey("");
+
+      showSnackbar("API key saved securely");
+      await loadApiKeys();
+    } catch {
+      showSnackbar("Failed to save API key", "error");
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  async function deleteApiKey(keyType: string) {
+    setDeletingKey(keyType);
+    try {
+      const res = await fetch("/api/user-api-keys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key_type: keyType }),
+      });
+
+      if (!res.ok) throw new Error("Failed to remove");
+
+      showSnackbar("API key removed");
+      await loadApiKeys();
+    } catch {
+      showSnackbar("Failed to remove API key", "error");
+    } finally {
+      setDeletingKey(null);
+    }
+  }
 
   async function updateSetting(key: string, value: string | boolean) {
     if (!localSettings) return;
@@ -100,6 +175,9 @@ export default function SettingsPage() {
     setSaving(false);
   }
 
+  const hasApifyKey = apiKeys.some((k) => k.key_type === "apify");
+  const hasOpenrouterKey = apiKeys.some((k) => k.key_type === "openrouter");
+
   if (loading || !localSettings) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -112,7 +190,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-2 text-2xl font-bold">Settings</h1>
       <p className="mb-8 text-muted-foreground">
-        Configure your contact info and resume generation preferences.
+        Configure your contact info, API keys, and resume generation preferences.
       </p>
 
       <div className="space-y-6">
@@ -127,7 +205,6 @@ export default function SettingsPage() {
               <Input
                 value={localSettings.full_name || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, full_name: e.target.value })}
-
                 placeholder="C.J. Britz"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -138,7 +215,6 @@ export default function SettingsPage() {
                 type="email"
                 value={localSettings.email || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, email: e.target.value })}
-
                 placeholder="you@example.com"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -149,7 +225,6 @@ export default function SettingsPage() {
                 type="tel"
                 value={localSettings.phone || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, phone: e.target.value })}
-
                 placeholder="805-428-7721"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -160,7 +235,6 @@ export default function SettingsPage() {
                 type="url"
                 value={localSettings.linkedin_url || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, linkedin_url: e.target.value })}
-
                 placeholder="https://linkedin.com/in/cjbritz"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -170,7 +244,6 @@ export default function SettingsPage() {
               <Input
                 value={localSettings.location || ""}
                 onChange={(e) => setLocalSettings({ ...localSettings, location: e.target.value })}
-
                 placeholder="Los Angeles, CA"
                 className="border-[var(--border-input)] bg-[var(--bg-card)]"
               />
@@ -178,6 +251,178 @@ export default function SettingsPage() {
             <Button onClick={saveContactInfo} disabled={saving} className="mt-2">
               {saving ? "Saving..." : "Save Contact Info"}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* API Keys */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Key size={18} />
+              API Keys
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <p className="text-sm text-[var(--text-muted)]">
+              Adding your own keys means your usage is billed to your accounts directly (free tier).
+              Keys are encrypted and never visible after saving.
+            </p>
+
+            {/* Apify */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-sm font-medium text-[var(--text-muted)]">
+                  Apify API Key
+                  <span className="ml-1 text-xs font-normal">(for LinkedIn job scraping)</span>
+                </label>
+                <a
+                  href="https://console.apify.com/account/integrations"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-[var(--accent)] hover:underline"
+                >
+                  Get key <ExternalLink size={10} />
+                </a>
+              </div>
+              {hasApifyKey ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value="••••••••••••••••"
+                    disabled
+                    className="border-[var(--border-input)] bg-[var(--bg-base)]"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => deleteApiKey("apify")}
+                    disabled={deletingKey === "apify"}
+                    className="flex-shrink-0"
+                  >
+                    {deletingKey === "apify" ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    value={apifyKey}
+                    onChange={(e) => setApifyKey(e.target.value)}
+                    placeholder="apify_api_..."
+                    className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => saveApiKey("apify", apifyKey)}
+                    disabled={!apifyKey.trim() || savingKey === "apify"}
+                    className="flex-shrink-0"
+                  >
+                    {savingKey === "apify" ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      "Save"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* OpenRouter */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-sm font-medium text-[var(--text-muted)]">
+                  OpenRouter API Key
+                  <span className="ml-1 text-xs font-normal">(for AI analysis)</span>
+                </label>
+                <a
+                  href="https://openrouter.ai/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-[var(--accent)] hover:underline"
+                >
+                  Get key <ExternalLink size={10} />
+                </a>
+              </div>
+              {hasOpenrouterKey ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value="••••••••••••••••"
+                    disabled
+                    className="border-[var(--border-input)] bg-[var(--bg-base)]"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => deleteApiKey("openrouter")}
+                    disabled={deletingKey === "openrouter"}
+                    className="flex-shrink-0"
+                  >
+                    {deletingKey === "openrouter" ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    value={openrouterKey}
+                    onChange={(e) => setOpenrouterKey(e.target.value)}
+                    placeholder="sk-or-..."
+                    className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => saveApiKey("openrouter", openrouterKey)}
+                    disabled={!openrouterKey.trim() || savingKey === "openrouter"}
+                    className="flex-shrink-0"
+                  >
+                    {savingKey === "openrouter" ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      "Save"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Subscription */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Subscription</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  Current Plan: <span className="text-[var(--accent)]">Free (BYOK)</span>
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Bring your own API keys — usage billed to your accounts
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Pro Plan — $10/mo</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Platform covers all Apify and AI costs. No API keys needed.
+                  </p>
+                </div>
+                <Button size="sm" disabled className="opacity-60">
+                  Coming soon
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

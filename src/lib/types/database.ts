@@ -7,6 +7,8 @@ export type InterviewStatus = "pending" | "yes" | "no";
 export type ScoreTier = "strong" | "weak" | "none";
 export type DocumentType = "resume" | "project_writeup" | "biz_case" | "award" | "certification" | "performance_review" | "other";
 export type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
+export type JobStatus = "unseen" | "saved" | "dismissed" | "applied";
+export type ApiKeyType = "apify" | "openrouter";
 
 export interface Database {
   public: {
@@ -284,6 +286,188 @@ export interface Database {
           summary_included?: boolean;
           editorial_notes?: Record<string, unknown>;
           version?: number;
+        };
+      };
+      jobs: {
+        Row: {
+          id: string;
+          title: string | null;
+          company_name: string | null;
+          company_linkedin_url: string | null;
+          company_logo: string | null;
+          company_description: string | null;
+          company_website: string | null;
+          company_employees_count: number | null;
+          location: string | null;
+          salary_info: Record<string, unknown> | null;
+          posted_at: string | null;
+          employment_type: string | null;
+          seniority_level: string | null;
+          job_function: string | null;
+          industries: string[] | null;
+          description_text: string | null;
+          description_html: string | null;
+          apply_url: string | null;
+          applicants_count: number | null;
+          job_poster_name: string | null;
+          job_poster_title: string | null;
+          job_poster_profile_url: string | null;
+          raw_data: Record<string, unknown> | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          title?: string | null;
+          company_name?: string | null;
+          company_linkedin_url?: string | null;
+          company_logo?: string | null;
+          company_description?: string | null;
+          company_website?: string | null;
+          company_employees_count?: number | null;
+          location?: string | null;
+          salary_info?: Record<string, unknown> | null;
+          posted_at?: string | null;
+          employment_type?: string | null;
+          seniority_level?: string | null;
+          job_function?: string | null;
+          industries?: string[] | null;
+          description_text?: string | null;
+          description_html?: string | null;
+          apply_url?: string | null;
+          applicants_count?: number | null;
+          job_poster_name?: string | null;
+          job_poster_title?: string | null;
+          job_poster_profile_url?: string | null;
+          raw_data?: Record<string, unknown> | null;
+        };
+        Update: {
+          title?: string | null;
+          company_name?: string | null;
+          company_linkedin_url?: string | null;
+          company_logo?: string | null;
+          company_description?: string | null;
+          company_website?: string | null;
+          company_employees_count?: number | null;
+          location?: string | null;
+          salary_info?: Record<string, unknown> | null;
+          posted_at?: string | null;
+          employment_type?: string | null;
+          seniority_level?: string | null;
+          job_function?: string | null;
+          industries?: string[] | null;
+          description_text?: string | null;
+          description_html?: string | null;
+          apply_url?: string | null;
+          applicants_count?: number | null;
+          job_poster_name?: string | null;
+          job_poster_title?: string | null;
+          job_poster_profile_url?: string | null;
+          raw_data?: Record<string, unknown> | null;
+        };
+      };
+      search_cache: {
+        Row: {
+          id: string;
+          search_url_hash: string;
+          search_url: string;
+          job_ids: string[];
+          result_count: number;
+          scraped_at: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          search_url_hash: string;
+          search_url: string;
+          job_ids: string[];
+          result_count?: number;
+          scraped_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          search_url_hash?: string;
+          search_url?: string;
+          job_ids?: string[];
+          result_count?: number;
+          scraped_at?: string;
+          expires_at?: string;
+        };
+      };
+      user_saved_searches: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          search_url: string;
+          search_url_hash: string;
+          is_active: boolean;
+          last_notified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          name: string;
+          search_url: string;
+          search_url_hash: string;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          search_url?: string;
+          search_url_hash?: string;
+          is_active?: boolean;
+          last_notified_at?: string | null;
+        };
+      };
+      user_jobs: {
+        Row: {
+          id: string;
+          user_id: string;
+          job_id: string;
+          search_id: string | null;
+          status: JobStatus;
+          fit_score: number | null;
+          resume_id: string | null;
+          application_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          job_id: string;
+          search_id?: string | null;
+          status?: JobStatus;
+          fit_score?: number | null;
+          resume_id?: string | null;
+          application_id?: string | null;
+        };
+        Update: {
+          search_id?: string | null;
+          status?: JobStatus;
+          fit_score?: number | null;
+          resume_id?: string | null;
+          application_id?: string | null;
+        };
+      };
+      user_api_keys: {
+        Row: {
+          id: string;
+          user_id: string;
+          key_type: ApiKeyType;
+          encrypted_value: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          key_type: ApiKeyType;
+          encrypted_value: string;
+        };
+        Update: {
+          key_type?: ApiKeyType;
+          encrypted_value?: string;
         };
       };
     };

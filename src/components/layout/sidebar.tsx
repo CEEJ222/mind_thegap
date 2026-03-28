@@ -15,10 +15,12 @@ import {
   LogOut,
   Menu,
   X,
+  Search,
 } from "lucide-react";
 
 const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
+  { href: "/jobs", label: "Jobs", icon: Search },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/applications", label: "Applications", icon: Briefcase },
 ];
