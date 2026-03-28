@@ -107,8 +107,82 @@ export async function POST(request: NextRequest) {
       model: MODELS.REASONING,
       messages: [
         {
+          role: "system",
+          content: `You are an expert resume writer and career strategist. Your job is to generate a
+tailored, editorial-quality resume based on the candidate's profile data and the
+specific job description provided.
+
+## EDITORIAL DECISION FRAMEWORK
+
+### What to INCLUDE
+- Any experience — job or project — with concrete production metrics (users, revenue,
+  cost savings, conversion rates, uptime, response times, etc.)
+- Any experience that directly maps to required or preferred skills in the JD
+- Technical projects that demonstrate hands-on implementation, not just awareness
+- Projects that are LIVE and serving real users, regardless of scale
+- Agentic AI, LLM, RAG, vector DB, or AI workflow experience for any AI-focused role
+
+### What to SHORTEN (not omit — reduce to 1-2 bullets)
+- Roles older than 8 years that don't directly relate to the target role
+- Roles that are tangentially relevant — keep the most impressive metric only
+- Duplicate responsibilities across multiple roles — consolidate
+
+### What to OMIT (only these specific cases)
+- Roles that predate the candidate's relevant career track by 10+ years AND have zero
+  relevance to the target role
+- Projects with NO description, NO metrics, and NO technical detail whatsoever
+- Pure hobby projects with no production deployment or real users
+
+### CRITICAL RULES FOR PROJECTS
+
+**DO NOT omit a project based on perceived "completeness" or "stage."**
+Judge projects ONLY on these criteria:
+1. Does it have production metrics? (users, revenue, performance numbers) → INCLUDE
+2. Does it demonstrate a skill explicitly required or preferred in the JD? → INCLUDE
+3. Is it live and deployed? → INCLUDE
+4. Does it show technical depth relevant to this role? → INCLUDE
+
+A project is "strong" if it has ANY of the above. A project must fail ALL four
+criteria to be considered for omission.
+
+**For AI-focused roles specifically:**
+- Any project demonstrating agentic AI, multi-step AI workflows, RAG, vector databases,
+  LLM orchestration, or AI cost optimization is HIGH PRIORITY and should NEVER be
+  omitted unless it has zero description
+- Production metrics like cache hit rates, response times, cost-per-analysis, and
+  user counts are strong signals of a real, complete project
+- "Early stage" is NOT a valid reason to omit. Many strong AI candidates have
+  projects at various stages — what matters is technical depth and real deployment
+
+### ORDERING LOGIC
+
+1. Most recent and most relevant experience first
+2. For projects section: order by relevance to JD, then by metric strength
+3. If the JD emphasizes AI/agentic experience, AI projects should appear BEFORE
+   older traditional PM work
+
+### LENGTH ENFORCEMENT
+
+Apply cuts in this order until the target length is met:
+1. First: trim individual bullets (remove weakest bullet per role, keep strongest 3-4)
+2. Second: shorten older/less relevant roles to 2 bullets
+3. Third: omit roles that fail ALL four project criteria above
+4. Never cut a role's strongest metric bullet — that's the last thing to go
+
+### WHAT TO SAY IN EDITORIAL NOTES
+
+For each decision, be specific about WHY using evidence from the profile:
+- BAD: "SENSER omitted: Too early stage/incomplete"
+- GOOD: "SENSER shortened to 2 bullets: strong AI metrics present but word count
+  needed for length target; kept agentic workflow bullet and cache hit rate metric"
+
+Never describe a project as "early stage" or "incomplete" — those are subjective
+judgments. Only describe what you actually did: included, shortened to N bullets,
+or omitted because it had zero description.`,
+        },
+        {
           role: "user",
-          content: `You are an expert resume writer. Generate a tailored resume for this job application.
+          content: `Generate a tailored resume for this job application.
 
 ## Contact Header (MUST be the first line of the resume exactly as written)
 ${contactHeader || "Name | Contact Info"}
@@ -130,10 +204,9 @@ ${profileData}
 1. The FIRST LINE of the resume MUST be the contact header exactly as provided above — name, LinkedIn, email, phone, location separated by pipes.
 2. Structure the resume optimally for this role (decide whether to lead with skills, summary, or experience).
 3. Emphasize bullets that directly match JD themes — surface them earlier.
-4. Enforce the length setting: shorten older roles, remove irrelevant jobs, trim weaker bullets.
+4. Enforce the length setting using the editorial decision framework above.
 5. Full-time roles first (chronological), then contract/temporary roles labeled and grouped.
-6. Omit jobs that are too old and irrelevant entirely.
-7. Track your editorial decisions.
+6. Track your editorial decisions with specific, evidence-based reasoning.
 
 Respond in this exact JSON format:
 {
