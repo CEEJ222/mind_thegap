@@ -65,44 +65,24 @@ export default function ProfilePage() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    try {
-      const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
-        supabase
-          .from("profile_entries")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("date_start", { ascending: false }),
-        supabase
-          .from("profile_chunks")
-          .select("*")
-          .eq("user_id", user.id),
-        supabase
-          .from("uploaded_documents")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("scraped_urls")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("users")
-          .select("profile_summary, avatar_url")
-          .eq("id", user.id)
-          .limit(1),
-      ]);
+    console.log("loadData: fetching for", user.id);
 
-      if (entriesRes.data) setEntries(entriesRes.data);
-      if (chunksRes.data) setChunks(chunksRes.data);
-      if (docsRes.data) setDocuments(docsRes.data);
-      if (urlsRes.data) setUrls(urlsRes.data);
-      const userData = userRes.data?.[0];
-      if (userData?.profile_summary) setSummary(userData.profile_summary);
-      if (userData?.avatar_url) setAvatarUrl(userData.avatar_url);
-    } catch {
-      // Supabase query failed
-    }
+    // Sequential queries — Supabase thenable + Chrome connection limits
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let entriesRes: any = null, chunksRes: any = null, docsRes: any = null, urlsRes: any = null, userRes: any = null;
+    try { entriesRes = await supabase.from("profile_entries").select("*").eq("user_id", user.id).order("date_start", { ascending: false }); } catch { /* ignore */ }
+    try { chunksRes = await supabase.from("profile_chunks").select("*").eq("user_id", user.id); } catch { /* ignore */ }
+    try { docsRes = await supabase.from("uploaded_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { /* ignore */ }
+    try { urlsRes = await supabase.from("scraped_urls").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { /* ignore */ }
+    try { userRes = await supabase.from("users").select("profile_summary, avatar_url").eq("id", user.id).limit(1); } catch { /* ignore */ }
+
+    console.log("loadData results:", {
+      entries: entriesRes?.data?.length ?? "ERR",
+      chunks: chunksRes?.data?.length ?? "ERR",
+      docs: docsRes?.data?.length ?? "ERR",
+      urls: urlsRes?.data?.length ?? "ERR",
+      user: userRes?.data?.[0] ? "OK" : "ERR",
+    });
 
     if (entriesRes?.data) setEntries(entriesRes.data);
     if (chunksRes?.data) setChunks(chunksRes.data);
@@ -111,6 +91,7 @@ export default function ProfilePage() {
     const userData = userRes?.data?.[0];
     if (userData?.profile_summary) setSummary(userData.profile_summary as string);
     if (userData?.avatar_url) setAvatarUrl(userData.avatar_url as string);
+
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);

@@ -52,25 +52,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialized = useRef(false);
 
   async function loadUserData(userId: string) {
+    // Sequential queries — avoids connection pool starvation on Chrome
     try {
-      const [settingsRes, profileRes] = await Promise.all([
-        supabase
-          .from("user_settings")
-          .select("*")
-          .eq("user_id", userId)
-          .limit(1),
-        supabase
-          .from("profile_entries")
-          .select("id")
-          .eq("user_id", userId)
-          .limit(1),
-      ]);
+      const { data: settingsData } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .limit(1);
+      if (settingsData?.[0]) setSettings(settingsData[0] as UserSettings);
+    } catch { /* ignore */ }
 
-      if (settingsRes.data?.[0]) setSettings(settingsRes.data[0] as UserSettings);
-      setHasProfile((profileRes.data?.length ?? 0) > 0);
-    } catch {
-      // Supabase query failed — leave defaults
-    }
+    try {
+      const { data: profileData } = await supabase
+        .from("profile_entries")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1);
+      setHasProfile((profileData?.length ?? 0) > 0);
+    } catch { /* ignore */ }
   }
 
   const refreshSettings = useCallback(async () => {
@@ -82,9 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", user.id)
         .limit(1);
       if (data?.[0]) setSettings(data[0] as UserSettings);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, [user, supabase]);
 
   const refreshProfile = useCallback(async () => {
@@ -124,11 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Hard timeout — never spin forever
     const timeout = setTimeout(() => setLoading(false), 5000);
 
+    // Use getSession (cached, no network call) to avoid auth lock contention
     (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        const currentUser = data.user;
-        console.log("Auth getUser result:", currentUser?.id ?? "NO USER", currentUser?.email);
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        console.log("Auth init:", currentUser?.id ?? "NO USER");
         setUser(currentUser);
         if (currentUser) {
           await loadUserData(currentUser.id);
@@ -143,16 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event: string, session: { user: User | null } | null) => {
-      try {
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        if (currentUser) {
-          await loadUserData(currentUser.id);
-        }
-      } catch {
-        // ignore
-      } finally {
+    } = supabase.auth.onAuthStateChange((_event: string, session: { user: User | null } | null) => {
+      // Don't await here — avoid holding the auth lock
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        loadUserData(currentUser.id).finally(() => setLoading(false));
+      } else {
         setLoading(false);
       }
     });
