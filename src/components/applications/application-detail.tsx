@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { cn, getScoreTierIcon, getFitScoreColor } from "@/lib/utils";
-import { ArrowLeft, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Download, Sparkles } from "lucide-react";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -22,8 +23,12 @@ interface Props {
 
 export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
   const supabase = createClient();
+  const router = useRouter();
   const [themes, setThemes] = useState<Theme[]>([]);
   const [resumes, setResumes] = useState<Resume[]>([]);
+  const [jdExpanded, setJdExpanded] = useState(false);
+  const [jdSummary, setJdSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const loadDetails = useCallback(async () => {
     const [themesRes, resumesRes] = await Promise.all([
@@ -45,6 +50,22 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
+
+  useEffect(() => {
+    if (!application.jd_text) return;
+    setSummaryLoading(true);
+    fetch("/api/summarize-jd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        application_id: application.id,
+        jd_text: application.jd_text,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.summary) setJdSummary(d.summary); })
+      .finally(() => setSummaryLoading(false));
+  }, [application.id, application.jd_text]);
 
   async function handleDownload(filePath: string) {
     try {
@@ -132,7 +153,37 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
           <CardTitle className="text-lg">Job Description</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="whitespace-pre-wrap text-sm">{application.jd_text}</p>
+          {/* AI summary */}
+          {summaryLoading && (
+            <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="h-3 w-3 animate-spin rounded-full border border-[var(--accent)] border-t-transparent" />
+              Summarizing…
+            </div>
+          )}
+          {jdSummary && !summaryLoading && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-3 py-2">
+              <span className="mt-0.5 text-xs text-[var(--accent)]">✦</span>
+              <p className="text-sm italic text-[var(--text-muted)]">{jdSummary}</p>
+            </div>
+          )}
+          <div className={jdExpanded ? "" : "relative"}>
+            <p
+              className={`whitespace-pre-wrap text-sm ${
+                jdExpanded ? "" : "line-clamp-3"
+              }`}
+            >
+              {application.jd_text}
+            </p>
+            {!jdExpanded && (
+              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[var(--bg-card,white)] to-transparent" />
+            )}
+          </div>
+          <button
+            onClick={() => setJdExpanded(!jdExpanded)}
+            className="mt-2 text-xs font-medium text-[var(--accent)] hover:underline"
+          >
+            {jdExpanded ? "Show less" : "Show full description"}
+          </button>
         </CardContent>
       </Card>
 
@@ -173,38 +224,66 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
       )}
 
       {/* Resumes */}
-      {resumes.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Generated Resumes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {resumes.map((resume) => (
-              <div
-                key={resume.id}
-                className="flex items-center justify-between rounded-md border border-border p-3"
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Generated Resumes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {resumes.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                No resume generated yet for this application.
+              </p>
+              <Button
+                onClick={() =>
+                  router.push(`/generate?application_id=${application.id}`)
+                }
+                className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
               >
-                <div>
-                  <span className="font-medium">Version {resume.version}</span>
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {resume.format.toUpperCase()} —{" "}
-                    {new Date(resume.created_at).toLocaleDateString()}
-                  </span>
+                <Sparkles className="h-4 w-4" />
+                Generate Resume
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {resumes.map((resume) => (
+                <div
+                  key={resume.id}
+                  className="flex items-center justify-between rounded-md border border-border p-3"
+                >
+                  <div>
+                    <span className="font-medium">Version {resume.version}</span>
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {resume.format.toUpperCase()} —{" "}
+                      {new Date(resume.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {resume.file_path && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownload(resume.file_path!)}
+                    >
+                      <Download className="mr-1 h-3 w-3" /> Download
+                    </Button>
+                  )}
                 </div>
-                {resume.file_path && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDownload(resume.file_path!)}
-                  >
-                    <Download className="mr-1 h-3 w-3" /> Download
-                  </Button>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 gap-2"
+                onClick={() =>
+                  router.push(`/generate?application_id=${application.id}`)
+                }
+              >
+                <Sparkles className="h-3 w-3" />
+                Regenerate
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
