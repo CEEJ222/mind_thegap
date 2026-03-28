@@ -64,51 +64,35 @@ export default function ProfilePage() {
   }
 
   const loadData = useCallback(async () => {
-    console.log("loadData called, user:", user?.id ?? "NULL");
-    if (!user) return;
-    const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
-      supabase
-        .from("profile_entries")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date_start", { ascending: false }),
-      supabase
-        .from("profile_chunks")
-        .select("*")
-        .eq("user_id", user.id),
-      supabase
-        .from("uploaded_documents")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("scraped_urls")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("users")
-        .select("profile_summary, avatar_url")
-        .eq("id", user.id)
-        .single(),
-    ]);
+    if (!user) {
+      console.log("loadData: no user");
+      return;
+    }
+    console.log("loadData: fetching for", user.id);
 
-    if (entriesRes.data) setEntries(entriesRes.data);
-    if (chunksRes.data) setChunks(chunksRes.data);
-    if (docsRes.data) setDocuments(docsRes.data);
-    if (urlsRes.data) setUrls(urlsRes.data);
-    if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
-    if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
+    // Run queries individually so one failure doesn't block all
+    const entriesRes = await supabase.from("profile_entries").select("*").eq("user_id", user.id).order("date_start", { ascending: false }).catch(() => null);
+    const chunksRes = await supabase.from("profile_chunks").select("*").eq("user_id", user.id).catch(() => null);
+    const docsRes = await supabase.from("uploaded_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).catch(() => null);
+    const urlsRes = await supabase.from("scraped_urls").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).catch(() => null);
+    const userRes = await supabase.from("users").select("profile_summary, avatar_url").eq("id", user.id).limit(1).catch(() => null);
 
-    // Debug: log query results on prod
-    console.log("Profile loadData:", {
-      entries: entriesRes.data?.length ?? 0,
-      entriesError: entriesRes.error?.message,
-      chunks: chunksRes.data?.length ?? 0,
-      docs: docsRes.data?.length ?? 0,
-      userId: user?.id,
+    console.log("loadData results:", {
+      entries: entriesRes?.data?.length ?? "ERR",
+      chunks: chunksRes?.data?.length ?? "ERR",
+      docs: docsRes?.data?.length ?? "ERR",
+      urls: urlsRes?.data?.length ?? "ERR",
+      user: userRes?.data?.[0] ? "OK" : "ERR",
+      entriesError: entriesRes?.error?.message,
     });
 
+    if (entriesRes?.data) setEntries(entriesRes.data);
+    if (chunksRes?.data) setChunks(chunksRes.data);
+    if (docsRes?.data) setDocuments(docsRes.data);
+    if (urlsRes?.data) setUrls(urlsRes.data);
+    const userData = userRes?.data?.[0];
+    if (userData?.profile_summary) setSummary(userData.profile_summary as string);
+    if (userData?.avatar_url) setAvatarUrl(userData.avatar_url as string);
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);
