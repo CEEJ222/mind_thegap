@@ -52,20 +52,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialized = useRef(false);
 
   async function loadUserData(userId: string) {
-    const [settingsRes, profileRes] = await Promise.all([
-      supabase
+    try {
+      const { data: settingsData } = await supabase
         .from("user_settings")
         .select("*")
         .eq("user_id", userId)
-        .single(),
-      supabase
-        .from("profile_entries")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId),
-    ]);
+        .limit(1);
+      if (settingsData?.[0]) setSettings(settingsData[0] as UserSettings);
+    } catch { /* ignore */ }
 
-    if (settingsRes.data) setSettings(settingsRes.data as UserSettings);
-    setHasProfile((profileRes.count ?? 0) > 0);
+    try {
+      const { data: profileData } = await supabase
+        .from("profile_entries")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1);
+      setHasProfile((profileData?.length ?? 0) > 0);
+    } catch { /* ignore */ }
   }
 
   const refreshSettings = useCallback(async () => {
@@ -80,11 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (!user) return;
-    const { count } = await supabase
-      .from("profile_entries")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
-    setHasProfile((count ?? 0) > 0);
+    try {
+      const { data } = await supabase
+        .from("profile_entries")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1);
+      setHasProfile((data?.length ?? 0) > 0);
+    } catch {
+      // ignore
+    }
   }, [user, supabase]);
 
   function signOut() {

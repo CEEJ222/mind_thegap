@@ -70,12 +70,13 @@ export default function ProfilePage() {
     }
     console.log("loadData: fetching for", user.id);
 
-    // Run queries individually so one failure doesn't block all
-    const entriesRes = await supabase.from("profile_entries").select("*").eq("user_id", user.id).order("date_start", { ascending: false }).catch(() => null);
-    const chunksRes = await supabase.from("profile_chunks").select("*").eq("user_id", user.id).catch(() => null);
-    const docsRes = await supabase.from("uploaded_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).catch(() => null);
-    const urlsRes = await supabase.from("scraped_urls").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).catch(() => null);
-    const userRes = await supabase.from("users").select("profile_summary, avatar_url").eq("id", user.id).limit(1).catch(() => null);
+    // Run queries — Supabase query builder returns thenable, not Promise, so use await + try/catch
+    let entriesRes, chunksRes, docsRes, urlsRes, userRes;
+    try { entriesRes = await supabase.from("profile_entries").select("*").eq("user_id", user.id).order("date_start", { ascending: false }); } catch { entriesRes = null; }
+    try { chunksRes = await supabase.from("profile_chunks").select("*").eq("user_id", user.id); } catch { chunksRes = null; }
+    try { docsRes = await supabase.from("uploaded_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { docsRes = null; }
+    try { urlsRes = await supabase.from("scraped_urls").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { urlsRes = null; }
+    try { userRes = await supabase.from("users").select("profile_summary, avatar_url").eq("id", user.id).limit(1); } catch { userRes = null; }
 
     console.log("loadData results:", {
       entries: entriesRes?.data?.length ?? "ERR",
