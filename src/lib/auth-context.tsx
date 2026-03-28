@@ -88,11 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, supabase]);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore — redirect anyway
+    }
     setUser(null);
     setSettings(null);
     setHasProfile(false);
-    window.location.href = "/";
+    // Force hard redirect regardless
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c.trim().split("=")[0] + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+    });
+    window.location.replace("/");
   }
 
   useEffect(() => {
