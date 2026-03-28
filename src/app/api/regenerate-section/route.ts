@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
       resume_id,
       override_item,
       override_instruction,
-      user_note,
     } = reqBody;
 
     if (!application_id || !resume_id || !override_item) {

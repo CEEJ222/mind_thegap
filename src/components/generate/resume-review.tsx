@@ -7,13 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { Download, RefreshCw, Plus, Undo2 } from "lucide-react";
 
-interface EditorialDecision {
-  type: "prioritized" | "shortened" | "omitted";
-  label: string;
-  reason: string;
-  userOverride?: "keep" | "remove" | null;
-}
-
 interface EditorialNotes {
   shortened?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
   omitted?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
@@ -90,7 +83,7 @@ export function ResumeReview({
     }
   }
 
-  async function handleOverride(itemLabel: string, section: "shortened" | "omitted") {
+  async function handleOverride(itemLabel: string) {
     setOverriding(true);
     setActiveOverride(null);
 
@@ -125,9 +118,8 @@ export function ResumeReview({
   function renderOverridableItem(
     item: { role: string; reason: string; userOverride?: "keep" | "remove" | null },
     index: number,
-    section: "shortened" | "omitted"
   ) {
-    const itemKey = `${section}-${index}`;
+    const itemKey = `${item.role}-${index}`;
     const isOverridden = item.userOverride === "keep";
     const isActive = activeOverride === itemKey;
 
@@ -163,13 +155,13 @@ export function ResumeReview({
               onChange={(e) => setOverrideNote(e.target.value)}
               className="h-8 flex-1 text-xs border-[var(--border-input)] bg-[var(--bg-card)]"
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleOverride(item.role, section);
+                if (e.key === "Enter") handleOverride(item.role);
               }}
             />
             <Button
               variant="save-rescore"
               size="sm"
-              onClick={() => handleOverride(item.role, section)}
+              onClick={() => handleOverride(item.role)}
             >
               Save
             </Button>
@@ -214,7 +206,7 @@ export function ResumeReview({
               </h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {notes.shortened.map((item, i) =>
-                  renderOverridableItem(item, i, "shortened")
+                  renderOverridableItem(item, i)
                 )}
               </ul>
             </div>
@@ -225,7 +217,7 @@ export function ResumeReview({
               <h4 className="mb-2 text-sm font-semibold text-error">Omitted</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {notes.omitted.map((item, i) =>
-                  renderOverridableItem(item, i, "omitted")
+                  renderOverridableItem(item, i)
                 )}
               </ul>
             </div>
