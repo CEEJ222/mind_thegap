@@ -36,15 +36,20 @@ export default function SettingsPage() {
       return;
     }
     if (user) {
-      supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data }: { data: Settings | null }) => {
-          if (data) setLocalSettings(data as Settings);
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from("user_settings")
+            .select("*")
+            .eq("user_id", user.id)
+            .limit(1);
+          if (data?.[0]) setLocalSettings(data[0] as Settings);
+        } catch {
+          // ignore
+        } finally {
           setLoading(false);
-        });
+        }
+      })();
     }
   }, [user, settings, supabase]);
 

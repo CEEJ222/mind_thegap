@@ -65,48 +65,44 @@ export default function ProfilePage() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
-      supabase
-        .from("profile_entries")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date_start", { ascending: false }),
-      supabase
-        .from("profile_chunks")
-        .select("*")
-        .eq("user_id", user.id),
-      supabase
-        .from("uploaded_documents")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("scraped_urls")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("users")
-        .select("profile_summary, avatar_url")
-        .eq("id", user.id)
-        .single(),
-    ]);
+    try {
+      const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
+        supabase
+          .from("profile_entries")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date_start", { ascending: false }),
+        supabase
+          .from("profile_chunks")
+          .select("*")
+          .eq("user_id", user.id),
+        supabase
+          .from("uploaded_documents")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("scraped_urls")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("users")
+          .select("profile_summary, avatar_url")
+          .eq("id", user.id)
+          .limit(1),
+      ]);
 
-    if (entriesRes.data) setEntries(entriesRes.data);
-    if (chunksRes.data) setChunks(chunksRes.data);
-    if (docsRes.data) setDocuments(docsRes.data);
-    if (urlsRes.data) setUrls(urlsRes.data);
-    if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
-    if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
-
-    // Debug: log query results on prod
-    console.log("Profile loadData:", {
-      entries: entriesRes.data?.length ?? 0,
-      entriesError: entriesRes.error?.message,
-      chunks: chunksRes.data?.length ?? 0,
-      docs: docsRes.data?.length ?? 0,
-      userId: user?.id,
-    });
+      if (entriesRes.data) setEntries(entriesRes.data);
+      if (chunksRes.data) setChunks(chunksRes.data);
+      if (docsRes.data) setDocuments(docsRes.data);
+      if (urlsRes.data) setUrls(urlsRes.data);
+      const userData = userRes.data?.[0];
+      if (userData?.profile_summary) setSummary(userData.profile_summary);
+      if (userData?.avatar_url) setAvatarUrl(userData.avatar_url);
+    } catch {
+      // Supabase query failed
+    }
 
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps

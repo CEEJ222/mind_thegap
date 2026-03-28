@@ -52,39 +52,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialized = useRef(false);
 
   async function loadUserData(userId: string) {
-    const [settingsRes, profileRes] = await Promise.all([
-      supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", userId)
-        .single(),
-      supabase
-        .from("profile_entries")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId),
-    ]);
+    try {
+      const [settingsRes, profileRes] = await Promise.all([
+        supabase
+          .from("user_settings")
+          .select("*")
+          .eq("user_id", userId)
+          .limit(1),
+        supabase
+          .from("profile_entries")
+          .select("id")
+          .eq("user_id", userId)
+          .limit(1),
+      ]);
 
-    if (settingsRes.data) setSettings(settingsRes.data as UserSettings);
-    setHasProfile((profileRes.count ?? 0) > 0);
+      if (settingsRes.data?.[0]) setSettings(settingsRes.data[0] as UserSettings);
+      setHasProfile((profileRes.data?.length ?? 0) > 0);
+    } catch {
+      // Supabase query failed — leave defaults
+    }
   }
 
   const refreshSettings = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-    if (data) setSettings(data as UserSettings);
+    try {
+      const { data } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .limit(1);
+      if (data?.[0]) setSettings(data[0] as UserSettings);
+    } catch {
+      // ignore
+    }
   }, [user, supabase]);
 
   const refreshProfile = useCallback(async () => {
     if (!user) return;
-    const { count } = await supabase
-      .from("profile_entries")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
-    setHasProfile((count ?? 0) > 0);
+    try {
+      const { data } = await supabase
+        .from("profile_entries")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1);
+      setHasProfile((data?.length ?? 0) > 0);
+    } catch {
+      // ignore
+    }
   }, [user, supabase]);
 
   async function signOut() {
@@ -102,23 +116,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Hard timeout — never spin forever
     const timeout = setTimeout(() => setLoading(false), 5000);
 
-    supabase.auth.getUser()
-      .then(({ data }: { data: { user: User | null } }) => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
         const currentUser = data.user;
         setUser(currentUser);
         if (currentUser) {
-          loadUserData(currentUser.id)
-            .then(() => { setLoading(false); clearTimeout(timeout); })
-            .catch(() => { setLoading(false); clearTimeout(timeout); });
-        } else {
-          setLoading(false);
-          clearTimeout(timeout);
+          await loadUserData(currentUser.id);
         }
-      })
-      .catch(() => {
+      } catch {
+        // auth failed — leave defaults
+      } finally {
         setLoading(false);
         clearTimeout(timeout);
-      });
+      }
+    })();
 
     const {
       data: { subscription },
