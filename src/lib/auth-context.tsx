@@ -53,32 +53,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadUserData(userId: string) {
     try {
-      const { data: settingsData } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", userId)
-        .limit(1);
-      if (settingsData?.[0]) setSettings(settingsData[0] as UserSettings);
-    } catch { /* ignore */ }
+      const [settingsRes, profileRes] = await Promise.all([
+        supabase
+          .from("user_settings")
+          .select("*")
+          .eq("user_id", userId)
+          .limit(1),
+        supabase
+          .from("profile_entries")
+          .select("id")
+          .eq("user_id", userId)
+          .limit(1),
+      ]);
 
-    try {
-      const { data: profileData } = await supabase
-        .from("profile_entries")
-        .select("id")
-        .eq("user_id", userId)
-        .limit(1);
-      setHasProfile((profileData?.length ?? 0) > 0);
-    } catch { /* ignore */ }
+      if (settingsRes.data?.[0]) setSettings(settingsRes.data[0] as UserSettings);
+      setHasProfile((profileRes.data?.length ?? 0) > 0);
+    } catch {
+      // Supabase query failed — leave defaults
+    }
   }
 
   const refreshSettings = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-    if (data) setSettings(data as UserSettings);
+    try {
+      const { data } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .limit(1);
+      if (data?.[0]) setSettings(data[0] as UserSettings);
+    } catch {
+      // ignore
+    }
   }, [user, supabase]);
 
   const refreshProfile = useCallback(async () => {
@@ -118,24 +124,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Hard timeout — never spin forever
     const timeout = setTimeout(() => setLoading(false), 5000);
 
-    supabase.auth.getUser()
-      .then(({ data }: { data: { user: User | null } }) => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
         const currentUser = data.user;
         console.log("Auth getUser result:", currentUser?.id ?? "NO USER", currentUser?.email);
         setUser(currentUser);
         if (currentUser) {
-          loadUserData(currentUser.id)
-            .then(() => { setLoading(false); clearTimeout(timeout); })
-            .catch((err) => { console.error("loadUserData error:", err); setLoading(false); clearTimeout(timeout); });
-        } else {
-          setLoading(false);
-          clearTimeout(timeout);
+          await loadUserData(currentUser.id);
         }
-      })
-      .catch(() => {
+      } catch {
+        // auth failed — leave defaults
+      } finally {
         setLoading(false);
         clearTimeout(timeout);
-      });
+      }
+    })();
 
     const {
       data: { subscription },

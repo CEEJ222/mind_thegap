@@ -29,14 +29,18 @@ export function TopNav({ companyName, jobTitle, fitScore }: TopNavProps) {
   // Load avatar URL once
   if (user && !loaded) {
     setLoaded(true);
-    supabase
-      .from("users")
-      .select("avatar_url")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }: { data: { avatar_url: string | null } | null }) => {
-        if (data?.avatar_url) setAvatarUrl(data.avatar_url);
-      });
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("avatar_url")
+          .eq("id", user.id)
+          .limit(1);
+        if (data?.[0]?.avatar_url) setAvatarUrl(data[0].avatar_url);
+      } catch {
+        // ignore
+      }
+    })();
   }
 
   const fullName = user?.user_metadata?.full_name || user?.email || "User";

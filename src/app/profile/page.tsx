@@ -64,28 +64,45 @@ export default function ProfilePage() {
   }
 
   const loadData = useCallback(async () => {
-    if (!user) {
-      console.log("loadData: no user");
-      return;
+    if (!user) return;
+    try {
+      const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
+        supabase
+          .from("profile_entries")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date_start", { ascending: false }),
+        supabase
+          .from("profile_chunks")
+          .select("*")
+          .eq("user_id", user.id),
+        supabase
+          .from("uploaded_documents")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("scraped_urls")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("users")
+          .select("profile_summary, avatar_url")
+          .eq("id", user.id)
+          .limit(1),
+      ]);
+
+      if (entriesRes.data) setEntries(entriesRes.data);
+      if (chunksRes.data) setChunks(chunksRes.data);
+      if (docsRes.data) setDocuments(docsRes.data);
+      if (urlsRes.data) setUrls(urlsRes.data);
+      const userData = userRes.data?.[0];
+      if (userData?.profile_summary) setSummary(userData.profile_summary);
+      if (userData?.avatar_url) setAvatarUrl(userData.avatar_url);
+    } catch {
+      // Supabase query failed
     }
-    console.log("loadData: fetching for", user.id);
-
-    // Run queries — Supabase query builder returns thenable, not Promise, so use await + try/catch
-    let entriesRes, chunksRes, docsRes, urlsRes, userRes;
-    try { entriesRes = await supabase.from("profile_entries").select("*").eq("user_id", user.id).order("date_start", { ascending: false }); } catch { entriesRes = null; }
-    try { chunksRes = await supabase.from("profile_chunks").select("*").eq("user_id", user.id); } catch { chunksRes = null; }
-    try { docsRes = await supabase.from("uploaded_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { docsRes = null; }
-    try { urlsRes = await supabase.from("scraped_urls").select("*").eq("user_id", user.id).order("created_at", { ascending: false }); } catch { urlsRes = null; }
-    try { userRes = await supabase.from("users").select("profile_summary, avatar_url").eq("id", user.id).limit(1); } catch { userRes = null; }
-
-    console.log("loadData results:", {
-      entries: entriesRes?.data?.length ?? "ERR",
-      chunks: chunksRes?.data?.length ?? "ERR",
-      docs: docsRes?.data?.length ?? "ERR",
-      urls: urlsRes?.data?.length ?? "ERR",
-      user: userRes?.data?.[0] ? "OK" : "ERR",
-      entriesError: entriesRes?.error?.message,
-    });
 
     if (entriesRes?.data) setEntries(entriesRes.data);
     if (chunksRes?.data) setChunks(chunksRes.data);
