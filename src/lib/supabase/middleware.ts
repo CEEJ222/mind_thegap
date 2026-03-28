@@ -25,6 +25,7 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // This refreshes the session and sets cookies via setAll
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -38,14 +39,23 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    // Copy refreshed cookies to the redirect response
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+    return redirectResponse;
   }
 
-  // Redirect authenticated users away from landing and auth pages to generate
   if (user && (request.nextUrl.pathname === "/" || request.nextUrl.pathname.startsWith("/auth/"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/generate";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    // Copy refreshed cookies to the redirect response
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+    return redirectResponse;
   }
 
   return supabaseResponse;
