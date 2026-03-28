@@ -98,6 +98,16 @@ export default function ProfilePage() {
     if (urlsRes.data) setUrls(urlsRes.data);
     if (userRes.data?.profile_summary) setSummary(userRes.data.profile_summary);
     if (userRes.data?.avatar_url) setAvatarUrl(userRes.data.avatar_url);
+
+    // Debug: log query results on prod
+    console.log("Profile loadData:", {
+      entries: entriesRes.data?.length ?? 0,
+      entriesError: entriesRes.error?.message,
+      chunks: chunksRes.data?.length ?? 0,
+      docs: docsRes.data?.length ?? 0,
+      userId: user?.id,
+    });
+
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);

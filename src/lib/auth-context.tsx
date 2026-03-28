@@ -92,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSettings(null);
     setHasProfile(false);
+    window.location.href = "/";
   }
 
   useEffect(() => {
