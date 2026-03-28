@@ -17,20 +17,26 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              path: "/",
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
+              maxAge: 60 * 60 * 24 * 7, // 7 days
+            });
+          });
         },
       },
     }
   );
 
-  // This refreshes the session and sets cookies via setAll
+  // This refreshes the session and triggers setAll with updated cookies
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect unauthenticated users to login (except public routes)
+  // Public routes that don't require auth
   const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback"];
   const isPublicRoute = publicRoutes.some(
     (route) => request.nextUrl.pathname === route
@@ -40,7 +46,6 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     const redirectResponse = NextResponse.redirect(url);
-    // Copy refreshed cookies to the redirect response
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -51,7 +56,6 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/generate";
     const redirectResponse = NextResponse.redirect(url);
-    // Copy refreshed cookies to the redirect response
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
