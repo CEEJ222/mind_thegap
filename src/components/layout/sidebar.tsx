@@ -16,12 +16,13 @@ import {
   Menu,
   X,
   Search,
+  BookmarkCheck,
 } from "lucide-react";
 
 const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/jobs", label: "Jobs", icon: Search },
-  { href: "/profile", label: "Profile", icon: User },
+  { href: "/jobs/saved", label: "Saved Jobs", icon: BookmarkCheck },
   { href: "/applications", label: "Applications", icon: Briefcase },
 ];
 
@@ -123,8 +124,10 @@ function SidebarContent({
     <>
       <div className="flex h-14 items-center justify-between px-4">
         {!collapsed && (
-          <Link href="/generate" className="text-lg font-semibold text-[var(--text-primary)]" onClick={onNavClick}>
-            Mind <span className="text-[var(--accent)]">the App</span>
+          <Link href="/generate" className="text-lg" onClick={onNavClick}>
+            <span className="font-medium text-[var(--text-primary)]">Mind </span>
+            <span className="font-medium text-[var(--accent)]">the </span>
+            <span className="font-black text-[var(--accent)]">App</span>
           </Link>
         )}
         <button

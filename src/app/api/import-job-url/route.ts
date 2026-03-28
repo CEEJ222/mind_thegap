@@ -13,28 +13,28 @@ function extractJobId(url: string): string | null {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapApifyJob(raw: any): Record<string, unknown> {
   return {
-    id: String(raw.id || raw.jobId || raw.linkedinJobId || ""),
+    id: String(raw.id || ""),
     title: raw.title || null,
-    company_name: raw.companyName || raw.company || null,
-    company_linkedin_url: raw.companyUrl || raw.companyLinkedinUrl || null,
-    company_logo: raw.companyLogo || raw.companyLogoUrl || null,
+    company_name: raw.companyName || null,
+    company_linkedin_url: raw.companyLinkedinUrl || null,
+    company_logo: raw.companyLogo || null,
     company_description: raw.companyDescription || null,
     company_website: raw.companyWebsite || null,
     company_employees_count: raw.companyEmployeesCount ? Number(raw.companyEmployeesCount) : null,
-    location: raw.location || raw.formattedLocation || null,
-    salary_info: raw.salary || raw.salaryInfo || null,
-    posted_at: raw.postedAt || raw.listedAt || raw.publishedAt || null,
-    employment_type: raw.employmentType || raw.contractType || null,
-    seniority_level: raw.seniorityLevel || raw.experienceLevel || null,
-    job_function: raw.jobFunction || raw.function || null,
-    industries: raw.industries || (raw.industry ? [raw.industry] : null),
-    description_text: raw.description || raw.descriptionText || null,
+    location: raw.location || null,
+    salary_info: raw.salaryInfo || null,
+    posted_at: raw.postedAt || null,
+    employment_type: raw.employmentType || null,
+    seniority_level: raw.seniorityLevel || null,
+    job_function: raw.jobFunction || null,
+    industries: raw.industries ? (Array.isArray(raw.industries) ? raw.industries : [raw.industries]) : null,
+    description_text: raw.descriptionText || null,
     description_html: raw.descriptionHtml || null,
-    apply_url: raw.applyUrl || raw.link || raw.url || null,
-    applicants_count: raw.applicantsCount ? Number(raw.applicantsCount) : null,
-    job_poster_name: raw.posterName || raw.jobPosterName || null,
-    job_poster_title: raw.posterTitle || raw.jobPosterTitle || null,
-    job_poster_profile_url: raw.posterProfileUrl || raw.jobPosterProfileUrl || null,
+    apply_url: raw.applyUrl || raw.link || null,
+    applicants_count: raw.applicantsCount ? Number(String(raw.applicantsCount).replace(/[^0-9]/g, "")) : null,
+    job_poster_name: raw.jobPosterName || null,
+    job_poster_title: raw.jobPosterTitle || null,
+    job_poster_profile_url: raw.jobPosterProfileUrl || null,
     raw_data: raw,
   };
 }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const jobId = extractJobId(job_url);
     if (!jobId) {
       return NextResponse.json(
-        { error: "Could not extract job ID from URL. Please use a LinkedIn job URL like linkedin.com/jobs/view/123456" },
+        { error: "That doesn't look like a LinkedIn job URL. Please use a URL like linkedin.com/jobs/view/123456 (not a company or profile URL)" },
         { status: 400 }
       );
     }
@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          searchUrl: job_url,
-          maxItems: 1,
-          proxy: { useApifyProxy: true },
+          urls: [job_url],
+          count: 10,
+          scrapeCompany: true,
         }),
       }
     );
@@ -150,9 +150,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mapped = mapApifyJob(rawItems[0]);
+    // Find the specific job matching our ID from the results
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const matchingRaw = rawItems.find((item: any) => String(item.id) === jobId) || rawItems[0];
+    const mapped = mapApifyJob(matchingRaw);
     // Use the extracted job ID if Apify returns a different one
-    if (!mapped.id || mapped.id === "undefined") {
+    if (!mapped.id || mapped.id === "undefined" || mapped.id !== jobId) {
       mapped.id = jobId;
     }
 

@@ -4,25 +4,20 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { showSnackbar } from "@/components/ui/snackbar";
 import {
-  Search,
-  Loader2,
-  Bookmark,
   BookmarkCheck,
-  X,
   ExternalLink,
   Sparkles,
-  Plus,
   MapPin,
   Building2,
   Clock,
   Users,
   DollarSign,
   Trash2,
+  Bookmark,
   ArrowUpDown,
   Filter,
   ChevronDown,
@@ -46,41 +41,16 @@ interface Job {
   industries: string[] | null;
 }
 
-interface UserJob {
-  id: string;
-  job_id: string;
-  status: JobStatus;
-  fit_score: number | null;
-}
-
-interface SavedSearch {
-  id: string;
-  name: string;
-  search_url: string;
-  is_active: boolean;
-  created_at: string;
-}
-
 type SortField = "posted_at" | "applicants_count" | "company_name" | "title";
 type SortDir = "asc" | "desc";
 
-export default function JobsPage() {
+export default function SavedJobsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [userJobs, setUserJobs] = useState<Map<string, UserJob>>(new Map());
-  const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scraping, setScraping] = useState(false);
-
-  // New search form
-  const [showNewSearch, setShowNewSearch] = useState(false);
-  const [newSearchUrl, setNewSearchUrl] = useState("");
-  const [newSearchName, setNewSearchName] = useState("");
-  const [savingSearch, setSavingSearch] = useState(false);
 
   // Filters & sorting
   const [sortField, setSortField] = useState<SortField>("posted_at");
@@ -91,34 +61,38 @@ export default function JobsPage() {
   const [filterLocation, setFilterLocation] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const loadSavedSearches = useCallback(async () => {
+  const loadSavedJobs = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("user_saved_searches")
-      .select("*")
+    setLoading(true);
+
+    const { data: userJobs } = await supabase
+      .from("user_jobs")
+      .select("job_id")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    setSavedSearches(data || []);
+      .eq("status", "saved");
+
+    if (!userJobs?.length) {
+      setJobs([]);
+      setLoading(false);
+      return;
+    }
+
+    const jobIds = userJobs.map((uj: { job_id: string }) => uj.job_id);
+
+    const { data: jobData } = await supabase
+      .from("jobs")
+      .select("*")
+      .in("id", jobIds);
+
+    setJobs(jobData || []);
     setLoading(false);
   }, [user, supabase]);
 
-  const loadUserJobs = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("user_jobs")
-      .select("id, job_id, status, fit_score")
-      .eq("user_id", user.id);
-    const map = new Map<string, UserJob>();
-    (data || []).forEach((uj: { id: string; job_id: string; status: JobStatus; fit_score: number | null }) => map.set(uj.job_id, uj as UserJob));
-    setUserJobs(map);
-  }, [user, supabase]);
-
   useEffect(() => {
-    loadSavedSearches();
-    loadUserJobs();
-  }, [loadSavedSearches, loadUserJobs]);
+    loadSavedJobs();
+  }, [loadSavedJobs]);
 
-  // Derived filter options from current jobs
+  // Derived filter options
   const filterOptions = useMemo(() => {
     const companies = new Set<string>();
     const employmentTypes = new Set<string>();
@@ -140,11 +114,9 @@ export default function JobsPage() {
     };
   }, [jobs]);
 
-  // Filtered and sorted jobs
+  // Filtered and sorted
   const visibleJobs = useMemo(() => {
     const filtered = jobs.filter((j) => {
-      const uj = userJobs.get(j.id);
-      if (uj?.status === "dismissed") return false;
       if (filterCompany && j.company_name !== filterCompany) return false;
       if (filterEmploymentType && j.employment_type !== filterEmploymentType) return false;
       if (filterSeniority && j.seniority_level !== filterSeniority) return false;
@@ -185,112 +157,28 @@ export default function JobsPage() {
     });
 
     return filtered;
-  }, [jobs, userJobs, filterCompany, filterEmploymentType, filterSeniority, filterLocation, sortField, sortDir]);
+  }, [jobs, filterCompany, filterEmploymentType, filterSeniority, filterLocation, sortField, sortDir]);
 
   const activeFilterCount = [filterCompany, filterEmploymentType, filterSeniority, filterLocation].filter(Boolean).length;
 
-  async function handleSaveSearch() {
-    if (!user || !newSearchUrl.trim() || !newSearchName.trim()) return;
-    setSavingSearch(true);
-
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(newSearchUrl.trim().toLowerCase().replace(/\/+$/, ""));
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-
-      const { error } = await supabase.from("user_saved_searches").insert({
-        user_id: user.id,
-        name: newSearchName.trim(),
-        search_url: newSearchUrl.trim(),
-        search_url_hash: hashHex,
-      });
-
-      if (error) throw error;
-
-      setNewSearchUrl("");
-      setNewSearchName("");
-      setShowNewSearch(false);
-      showSnackbar("Search saved");
-      await loadSavedSearches();
-    } catch {
-      showSnackbar("Failed to save search", "error");
-    } finally {
-      setSavingSearch(false);
-    }
-  }
-
-  async function handleRunSearch(search: SavedSearch) {
-    setScraping(true);
-    setActiveSearchId(search.id);
-    setJobs([]);
-
-    try {
-      const res = await fetch("/api/scrape-jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ search_url: search.search_url }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setJobs(data.jobs || []);
-
-      if (user && data.job_ids?.length) {
-        for (const jobId of data.job_ids) {
-          if (!userJobs.has(jobId)) {
-            await supabase.from("user_jobs").upsert(
-              { user_id: user.id, job_id: jobId, search_id: search.id, status: "unseen" as JobStatus },
-              { onConflict: "user_id,job_id" }
-            );
-          }
-        }
-        await loadUserJobs();
-      }
-
-      if (data.cached) {
-        showSnackbar("Loaded from cache");
-      } else {
-        showSnackbar(`Found ${data.jobs?.length || 0} jobs`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Search failed";
-      showSnackbar(msg, "error");
-    } finally {
-      setScraping(false);
-    }
-  }
-
-  async function handleDeleteSearch(searchId: string) {
-    const { error } = await supabase
-      .from("user_saved_searches")
-      .delete()
-      .eq("id", searchId);
-
-    if (error) {
-      showSnackbar("Failed to delete", "error");
-      return;
-    }
-
-    if (activeSearchId === searchId) {
-      setActiveSearchId(null);
-      setJobs([]);
-    }
-    showSnackbar("Search removed");
-    await loadSavedSearches();
-  }
-
-  async function updateJobStatus(jobId: string, status: JobStatus) {
+  async function unsaveJob(jobId: string) {
     if (!user) return;
-
     await supabase.from("user_jobs").upsert(
-      { user_id: user.id, job_id: jobId, status },
+      { user_id: user.id, job_id: jobId, status: "unseen" as JobStatus },
       { onConflict: "user_id,job_id" }
     );
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    showSnackbar("Job removed from saved");
+  }
 
-    await loadUserJobs();
+  async function dismissJob(jobId: string) {
+    if (!user) return;
+    await supabase.from("user_jobs").upsert(
+      { user_id: user.id, job_id: jobId, status: "dismissed" as JobStatus },
+      { onConflict: "user_id,job_id" }
+    );
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    showSnackbar("Job dismissed");
   }
 
   function handleAnalyze(job: Job) {
@@ -353,115 +241,17 @@ export default function JobsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Jobs</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Search LinkedIn jobs and analyze them against your profile
-          </p>
-        </div>
-        <Button
-          onClick={() => setShowNewSearch(true)}
-          size="sm"
-          variant="outline"
-          className="gap-1.5"
-        >
-          <Plus size={16} />
-          <span className="hidden sm:inline">New Search</span>
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Saved Jobs</h1>
+        <p className="text-sm text-[var(--text-muted)]">
+          Jobs you&apos;ve saved for later
+        </p>
       </div>
-
-      {/* New Search Form */}
-      {showNewSearch && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Add a LinkedIn Job Search</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-[var(--text-muted)]">
-              Go to{" "}
-              <span className="font-medium text-[var(--text-primary)]">
-                linkedin.com/jobs
-              </span>
-              , set your filters (title, location, etc.), then copy the full URL from your browser&apos;s address bar.
-            </p>
-            <Input
-              placeholder="Search name (e.g. PM roles LA)"
-              value={newSearchName}
-              onChange={(e) => setNewSearchName(e.target.value)}
-              className="border-[var(--border-input)] bg-[var(--bg-card)]"
-            />
-            <Input
-              placeholder="Paste LinkedIn search URL..."
-              value={newSearchUrl}
-              onChange={(e) => setNewSearchUrl(e.target.value)}
-              className="border-[var(--border-input)] bg-[var(--bg-card)]"
-            />
-            <div className="flex gap-2">
-              <Button
-                onClick={handleSaveSearch}
-                disabled={!newSearchUrl.trim() || !newSearchName.trim() || savingSearch}
-                size="sm"
-              >
-                {savingSearch ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Search"
-                )}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowNewSearch(false);
-                  setNewSearchUrl("");
-                  setNewSearchName("");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                Cancel
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Saved Searches */}
-      {savedSearches.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {savedSearches.map((search) => (
-            <div
-              key={search.id}
-              className={`group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors cursor-pointer ${
-                activeSearchId === search.id
-                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--text-primary)]"
-                  : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
-              }`}
-              onClick={() => handleRunSearch(search)}
-            >
-              <Search size={14} />
-              <span>{search.name}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteSearch(search.id);
-                }}
-                className="ml-1 hidden rounded-full p-0.5 hover:bg-[var(--bg-card)] group-hover:block"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Filters & Sorting Bar */}
       {jobs.length > 0 && (
         <div className="mb-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Sort buttons */}
             <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
               <ArrowUpDown size={14} />
               <span className="hidden sm:inline">Sort:</span>
@@ -509,7 +299,6 @@ export default function JobsPage() {
             </div>
           </div>
 
-          {/* Filter dropdowns */}
           {showFilters && (
             <div className="flex flex-wrap gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="w-full sm:w-auto">
@@ -577,59 +366,40 @@ export default function JobsPage() {
             </div>
           )}
 
-          {/* Results count */}
           <p className="text-xs text-[var(--text-muted)]">
-            {visibleJobs.length} of {jobs.length} jobs
+            {visibleJobs.length} of {jobs.length} saved jobs
             {activeFilterCount > 0 && " (filtered)"}
           </p>
         </div>
       )}
 
       {/* Empty State */}
-      {savedSearches.length === 0 && !showNewSearch && (
+      {jobs.length === 0 && (
         <Card className="py-12 text-center">
           <CardContent>
-            <Search className="mx-auto mb-4 h-12 w-12 text-[var(--text-faint)]" />
+            <Bookmark className="mx-auto mb-4 h-12 w-12 text-[var(--text-faint)]" />
             <h2 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-              No saved searches yet
+              No saved jobs yet
             </h2>
             <p className="mb-4 text-sm text-[var(--text-muted)]">
-              Add a LinkedIn job search URL to start finding jobs that match your profile.
+              Save jobs from the Jobs page to review them later.
             </p>
-            <Button onClick={() => setShowNewSearch(true)} className="gap-1.5">
-              <Plus size={16} />
-              Add Your First Search
+            <Button onClick={() => router.push("/jobs")} className="gap-1.5">
+              Browse Jobs
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Scraping State */}
-      {scraping && (
-        <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="mb-3 h-8 w-8 animate-spin text-[var(--accent)]" />
-          <p className="text-sm text-[var(--text-muted)]">
-            Scraping LinkedIn jobs... this may take a minute
-          </p>
-        </div>
-      )}
-
       {/* Job Cards */}
-      {!scraping && visibleJobs.length > 0 && (
+      {visibleJobs.length > 0 && (
         <div className="space-y-3">
           {visibleJobs.map((job) => {
-            const uj = userJobs.get(job.id);
-            const isSaved = uj?.status === "saved";
-            const isUnseen = !uj || uj.status === "unseen";
             const salary = formatSalary(job.salary_info);
 
             return (
-              <Card
-                key={job.id}
-                className={`transition-colors ${isUnseen ? "" : "opacity-80"}`}
-              >
+              <Card key={job.id}>
                 <CardContent className="p-4">
-                  {/* Top row: logo + info + actions (desktop) */}
                   <div className="flex gap-3 sm:gap-4">
                     {/* Company Logo */}
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] sm:h-12 sm:w-12">
@@ -710,22 +480,11 @@ export default function JobsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          updateJobStatus(job.id, isSaved ? "unseen" : "saved")
-                        }
+                        onClick={() => unsaveJob(job.id)}
                         className="gap-1.5 text-xs"
                       >
-                        {isSaved ? (
-                          <>
-                            <BookmarkCheck size={14} />
-                            Saved
-                          </>
-                        ) : (
-                          <>
-                            <Bookmark size={14} />
-                            Save
-                          </>
-                        )}
+                        <BookmarkCheck size={14} />
+                        Unsave
                       </Button>
                       <div className="flex gap-1">
                         {job.apply_url && (
@@ -743,7 +502,7 @@ export default function JobsPage() {
                           size="sm"
                           variant="ghost"
                           className="h-7 w-7 p-0 text-[var(--text-faint)] hover:text-red-500"
-                          onClick={() => updateJobStatus(job.id, "dismissed")}
+                          onClick={() => dismissJob(job.id)}
                           title="Dismiss"
                         >
                           <Trash2 size={14} />
@@ -765,12 +524,10 @@ export default function JobsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() =>
-                        updateJobStatus(job.id, isSaved ? "unseen" : "saved")
-                      }
+                      onClick={() => unsaveJob(job.id)}
                       className="gap-1.5 text-xs"
                     >
-                      {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                      <BookmarkCheck size={14} />
                     </Button>
                     {job.apply_url && (
                       <Button
@@ -786,7 +543,7 @@ export default function JobsPage() {
                       size="sm"
                       variant="outline"
                       className="h-8 w-8 p-0 text-[var(--text-faint)] hover:text-red-500"
-                      onClick={() => updateJobStatus(job.id, "dismissed")}
+                      onClick={() => dismissJob(job.id)}
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -798,22 +555,14 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* No results after search */}
-      {!scraping && activeSearchId && visibleJobs.length === 0 && jobs.length > 0 && (
+      {/* Filtered empty */}
+      {jobs.length > 0 && visibleJobs.length === 0 && (
         <div className="py-12 text-center">
           <p className="text-sm text-[var(--text-muted)]">
-            No jobs match your filters.{" "}
+            No saved jobs match your filters.{" "}
             <button onClick={clearFilters} className="text-[var(--accent)] hover:underline">
               Clear filters
             </button>
-          </p>
-        </div>
-      )}
-
-      {!scraping && activeSearchId && jobs.length === 0 && (
-        <div className="py-12 text-center">
-          <p className="text-sm text-[var(--text-muted)]">
-            No jobs found for this search. Try adjusting your LinkedIn search filters.
           </p>
         </div>
       )}
