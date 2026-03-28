@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import {
   Sparkles,
-  User,
   Briefcase,
   Settings,
   PanelLeftClose,
