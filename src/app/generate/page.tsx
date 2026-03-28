@@ -37,8 +37,8 @@ interface ResumeResult {
   resume_id: string;
   file_path: string;
   editorial_notes: {
-    shortened?: { role: string; reason: string }[];
-    omitted?: { role: string; reason: string }[];
+    shortened?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
+    omitted?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
     prioritized?: string[];
   };
 }
@@ -343,6 +343,7 @@ export default function GeneratePage() {
             ? () => router.push(`/apply?applicationId=${returnApplicationId}&resume_id=${resume.resume_id}`)
             : undefined
         }
+        onResumeUpdate={(updated) => setResume(updated)}
       />
     );
   }
