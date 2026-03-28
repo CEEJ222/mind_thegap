@@ -64,6 +64,7 @@ export default function ProfilePage() {
   }
 
   const loadData = useCallback(async () => {
+    console.log("loadData called, user:", user?.id ?? "NULL");
     if (!user) return;
     const [entriesRes, chunksRes, docsRes, urlsRes, userRes] = await Promise.all([
       supabase

@@ -113,11 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getUser()
       .then(({ data }: { data: { user: User | null } }) => {
         const currentUser = data.user;
+        console.log("Auth getUser result:", currentUser?.id ?? "NO USER", currentUser?.email);
         setUser(currentUser);
         if (currentUser) {
           loadUserData(currentUser.id)
             .then(() => { setLoading(false); clearTimeout(timeout); })
-            .catch(() => { setLoading(false); clearTimeout(timeout); });
+            .catch((err) => { console.error("loadUserData error:", err); setLoading(false); clearTimeout(timeout); });
         } else {
           setLoading(false);
           clearTimeout(timeout);
