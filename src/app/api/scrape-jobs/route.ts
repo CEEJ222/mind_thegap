@@ -104,7 +104,15 @@ async function callApifyActor(searchUrl: string, apiKey: string): Promise<Record
 
     if (status === "SUCCEEDED") break;
     if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
-      throw new Error(`Apify run ${status}`);
+      // Fetch run detail for more info
+      const detail = statusData.data;
+      const reason = detail?.stats?.failedActivityCount
+        ? `${detail.stats.failedActivityCount} activities failed`
+        : detail?.exitCode != null
+        ? `exit code ${detail.exitCode}`
+        : "unknown reason";
+      console.error(`Apify run ${status} — ${reason}`, JSON.stringify(detail?.stats ?? {}));
+      throw new Error(`Apify run ${status}: ${reason}. This usually means LinkedIn is temporarily blocking the scraper. Try again in a few minutes, or use a different search URL.`);
     }
   }
 
@@ -156,6 +164,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve API key and call Apify
+    console.log("Scraping LinkedIn URL:", search_url);
     const apiKey = await resolveApifyKey(user.id);
     const rawItems = await callApifyActor(search_url, apiKey);
 

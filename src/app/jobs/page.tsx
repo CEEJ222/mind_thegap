@@ -82,6 +82,45 @@ export default function JobsPage() {
   const [newSearchName, setNewSearchName] = useState("");
   const [savingSearch, setSavingSearch] = useState(false);
 
+  // URL builder state
+  const [builderKeywords, setBuilderKeywords] = useState("");
+  const [builderLocation, setBuilderLocation] = useState("");
+  const [builderWorkType, setBuilderWorkType] = useState<"" | "1" | "2" | "3">("");
+  const [builderDatePosted, setBuilderDatePosted] = useState<"" | "r86400" | "r604800" | "r2592000">("");
+  const [builderExperience, setBuilderExperience] = useState<string[]>([]);
+  const [builderJobType, setBuilderJobType] = useState<"" | "F" | "P" | "C" | "T">("");
+  const [builderSortBy, setBuilderSortBy] = useState<"" | "DD" | "R">("");
+  const [showAdvancedUrl, setShowAdvancedUrl] = useState(false);
+
+  function buildLinkedInUrl(): string {
+    const params = new URLSearchParams();
+    if (builderKeywords) params.set("keywords", builderKeywords);
+    if (builderLocation) params.set("location", builderLocation);
+    if (builderWorkType) params.set("f_WT", builderWorkType);
+    if (builderDatePosted) params.set("f_TPR", builderDatePosted);
+    if (builderExperience.length) params.set("f_E", builderExperience.join(","));
+    if (builderJobType) params.set("f_JT", builderJobType);
+    if (builderSortBy) params.set("sortBy", builderSortBy);
+    params.set("position", "1");
+    params.set("pageNum", "0");
+    return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
+  }
+
+  function autoSearchName(): string {
+    const parts = [];
+    if (builderKeywords) parts.push(builderKeywords);
+    if (builderLocation) parts.push(builderLocation);
+    const wtLabel = builderWorkType === "2" ? "Remote" : builderWorkType === "3" ? "Hybrid" : builderWorkType === "1" ? "On-site" : "";
+    if (wtLabel) parts.push(wtLabel);
+    return parts.join(" · ");
+  }
+
+  function toggleExperience(val: string) {
+    setBuilderExperience((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]
+    );
+  }
+
   // Filters & sorting
   const [sortField, setSortField] = useState<SortField>("posted_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -190,20 +229,22 @@ export default function JobsPage() {
   const activeFilterCount = [filterCompany, filterEmploymentType, filterSeniority, filterLocation].filter(Boolean).length;
 
   async function handleSaveSearch() {
-    if (!user || !newSearchUrl.trim() || !newSearchName.trim()) return;
+    const url = newSearchUrl.trim() || buildLinkedInUrl();
+    const name = newSearchName.trim() || autoSearchName();
+    if (!user || !url || !name) return;
     setSavingSearch(true);
 
     try {
       const encoder = new TextEncoder();
-      const data = encoder.encode(newSearchUrl.trim().toLowerCase().replace(/\/+$/, ""));
+      const data = encoder.encode(url.toLowerCase().replace(/\/+$/, ""));
       const hashBuffer = await crypto.subtle.digest("SHA-256", data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
       const { error } = await supabase.from("user_saved_searches").insert({
         user_id: user.id,
-        name: newSearchName.trim(),
-        search_url: newSearchUrl.trim(),
+        name,
+        search_url: url,
         search_url_hash: hashHex,
       });
 
@@ -375,33 +416,191 @@ export default function JobsPage() {
       {showNewSearch && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Add a LinkedIn Job Search</CardTitle>
+            <CardTitle className="text-base">New Job Search</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-[var(--text-muted)]">
-              Go to{" "}
-              <span className="font-medium text-[var(--text-primary)]">
-                linkedin.com/jobs
-              </span>
-              , set your filters (title, location, etc.), then copy the full URL from your browser&apos;s address bar.
-            </p>
-            <Input
-              placeholder="Search name (e.g. PM roles LA)"
-              value={newSearchName}
-              onChange={(e) => setNewSearchName(e.target.value)}
-              className="border-[var(--border-input)] bg-[var(--bg-card)]"
-            />
-            <Input
-              placeholder="Paste LinkedIn search URL..."
-              value={newSearchUrl}
-              onChange={(e) => setNewSearchUrl(e.target.value)}
-              className="border-[var(--border-input)] bg-[var(--bg-card)]"
-            />
+          <CardContent className="space-y-4">
+            {/* Builder */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Job Title / Keywords
+                </label>
+                <Input
+                  placeholder="e.g. Product Manager"
+                  value={builderKeywords}
+                  onChange={(e) => {
+                    setBuilderKeywords(e.target.value);
+                    setNewSearchUrl(buildLinkedInUrl());
+                    if (!newSearchName || newSearchName === autoSearchName()) {
+                      setNewSearchName(autoSearchName());
+                    }
+                  }}
+                  className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Location
+                </label>
+                <Input
+                  placeholder="e.g. Los Angeles, CA"
+                  value={builderLocation}
+                  onChange={(e) => {
+                    setBuilderLocation(e.target.value);
+                    setNewSearchUrl(buildLinkedInUrl());
+                    if (!newSearchName || newSearchName === autoSearchName()) {
+                      setNewSearchName(autoSearchName());
+                    }
+                  }}
+                  className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Work Type
+                </label>
+                <select
+                  value={builderWorkType}
+                  onChange={(e) => {
+                    setBuilderWorkType(e.target.value as "" | "1" | "2" | "3");
+                    setNewSearchUrl(buildLinkedInUrl());
+                  }}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  <option value="">Any</option>
+                  <option value="1">On-site</option>
+                  <option value="2">Remote</option>
+                  <option value="3">Hybrid</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Date Posted
+                </label>
+                <select
+                  value={builderDatePosted}
+                  onChange={(e) => {
+                    setBuilderDatePosted(e.target.value as "" | "r86400" | "r604800" | "r2592000");
+                    setNewSearchUrl(buildLinkedInUrl());
+                  }}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  <option value="">Any time</option>
+                  <option value="r86400">Past 24 hours</option>
+                  <option value="r604800">Past week</option>
+                  <option value="r2592000">Past month</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Job Type
+                </label>
+                <select
+                  value={builderJobType}
+                  onChange={(e) => {
+                    setBuilderJobType(e.target.value as "" | "F" | "P" | "C" | "T");
+                    setNewSearchUrl(buildLinkedInUrl());
+                  }}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  <option value="">Any</option>
+                  <option value="F">Full-time</option>
+                  <option value="P">Part-time</option>
+                  <option value="C">Contract</option>
+                  <option value="T">Temporary</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  Sort By
+                </label>
+                <select
+                  value={builderSortBy}
+                  onChange={(e) => {
+                    setBuilderSortBy(e.target.value as "" | "DD" | "R");
+                    setNewSearchUrl(buildLinkedInUrl());
+                  }}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  <option value="">Most Relevant</option>
+                  <option value="DD">Most Recent</option>
+                  <option value="R">Most Relevant</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Experience Level — multi-select chips */}
+            <div>
+              <label className="mb-2 block text-xs font-medium text-[var(--text-muted)]">
+                Experience Level <span className="font-normal">(select all that apply)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { val: "1", label: "Internship" },
+                  { val: "2", label: "Entry level" },
+                  { val: "3", label: "Associate" },
+                  { val: "4", label: "Mid-Senior" },
+                  { val: "5", label: "Director" },
+                  { val: "6", label: "Executive" },
+                ].map(({ val, label }) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => toggleExperience(val)}
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                      builderExperience.includes(val)
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--text-primary)] font-medium"
+                        : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-[var(--accent)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search name */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                Search Name
+              </label>
+              <Input
+                placeholder="e.g. PM roles LA Remote"
+                value={newSearchName}
+                onChange={(e) => setNewSearchName(e.target.value)}
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+
+            {/* Advanced: show built URL */}
+            <div>
+              <button
+                onClick={() => setShowAdvancedUrl(!showAdvancedUrl)}
+                className="text-xs text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+              >
+                {showAdvancedUrl ? "Hide" : "Show"} search URL
+              </button>
+              {showAdvancedUrl && (
+                <div className="mt-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-3 py-2">
+                  <p className="break-all font-mono text-xs text-[var(--text-muted)]">
+                    {builderKeywords || builderLocation ? buildLinkedInUrl() : "Fill in keywords or location above"}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <Button
-                onClick={handleSaveSearch}
-                disabled={!newSearchUrl.trim() || !newSearchName.trim() || savingSearch}
+                onClick={() => {
+                  const url = buildLinkedInUrl();
+                  setNewSearchUrl(url);
+                  const name = newSearchName || autoSearchName();
+                  setNewSearchName(name);
+                  handleSaveSearch();
+                }}
+                disabled={!builderKeywords.trim() || !newSearchName.trim() || savingSearch}
                 size="sm"
+                className="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
               >
                 {savingSearch ? (
                   <>
@@ -409,7 +608,7 @@ export default function JobsPage() {
                     Saving...
                   </>
                 ) : (
-                  "Save Search"
+                  "Save & Search"
                 )}
               </Button>
               <Button
@@ -417,6 +616,13 @@ export default function JobsPage() {
                   setShowNewSearch(false);
                   setNewSearchUrl("");
                   setNewSearchName("");
+                  setBuilderKeywords("");
+                  setBuilderLocation("");
+                  setBuilderWorkType("");
+                  setBuilderDatePosted("");
+                  setBuilderExperience([]);
+                  setBuilderJobType("");
+                  setBuilderSortBy("");
                 }}
                 size="sm"
                 variant="ghost"

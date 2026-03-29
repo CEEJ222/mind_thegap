@@ -21,6 +21,9 @@ import {
   ArrowUpDown,
   Filter,
   ChevronDown,
+  Loader2,
+  CheckCircle2,
+  Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { JobStatus } from "@/lib/types/database";
@@ -43,6 +46,7 @@ interface Job {
 
 type SortField = "posted_at" | "applicants_count" | "company_name" | "title";
 type SortDir = "asc" | "desc";
+type CardState = "idle" | "analyzing" | "generating" | "done" | "error";
 
 export default function SavedJobsPage() {
   const { user } = useAuth();
@@ -51,6 +55,12 @@ export default function SavedJobsPage() {
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Batch generation state
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [cardStates, setCardStates] = useState<Map<string, CardState>>(new Map());
 
   // Filters & sorting
   const [sortField, setSortField] = useState<SortField>("posted_at");
@@ -65,11 +75,13 @@ export default function SavedJobsPage() {
     if (!user) return;
     setLoading(true);
 
+    // Only load saved jobs that don't have a resume generated yet
     const { data: userJobs } = await supabase
       .from("user_jobs")
       .select("job_id")
       .eq("user_id", user.id)
-      .eq("status", "saved");
+      .eq("status", "saved")
+      .is("resume_id", null);
 
     if (!userJobs?.length) {
       setJobs([]);
@@ -91,6 +103,96 @@ export default function SavedJobsPage() {
   useEffect(() => {
     loadSavedJobs();
   }, [loadSavedJobs]);
+
+  function setCardState(jobId: string, state: CardState) {
+    setCardStates((prev) => new Map(prev).set(jobId, state));
+  }
+
+  async function generateForJob(job: Job): Promise<boolean> {
+    if (!user || !job.description_text) return false;
+
+    try {
+      setCardState(job.id, "analyzing");
+
+      // Step 1: Analyze
+      const analyzeRes = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jd_text: job.description_text, user_id: user.id }),
+      });
+      const analyzeData = await analyzeRes.json();
+      if (!analyzeRes.ok) throw new Error(analyzeData.error);
+
+      setCardState(job.id, "generating");
+
+      // Step 2: Generate resume
+      const genRes = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application_id: analyzeData.application_id,
+          user_id: user.id,
+        }),
+      });
+      const genData = await genRes.json();
+      if (!genRes.ok) throw new Error(genData.error);
+
+      // Step 3: Update user_jobs with resume_id + application_id → removes from saved view
+      await supabase
+        .from("user_jobs")
+        .update({
+          resume_id: genData.resume_id,
+          application_id: analyzeData.application_id,
+        })
+        .eq("user_id", user.id)
+        .eq("job_id", job.id);
+
+      setCardState(job.id, "done");
+
+      // Remove from list after brief "done" flash
+      setTimeout(() => {
+        setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      }, 1200);
+
+      return true;
+    } catch (err) {
+      console.error(`Failed to generate resume for ${job.company_name}:`, err);
+      setCardState(job.id, "error");
+      return false;
+    }
+  }
+
+  async function handleBatchGenerate() {
+    if (!user || batchRunning) return;
+
+    const queue = [...visibleJobs].filter((j) => j.description_text);
+    if (!queue.length) {
+      showSnackbar("No jobs with descriptions to process", "error");
+      return;
+    }
+
+    setBatchRunning(true);
+    setBatchProgress(0);
+    setBatchTotal(queue.length);
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const job of queue) {
+      const ok = await generateForJob(job);
+      if (ok) succeeded++;
+      else failed++;
+      setBatchProgress((prev) => prev + 1);
+    }
+
+    setBatchRunning(false);
+    if (failed === 0) {
+      showSnackbar(`${succeeded} resume${succeeded !== 1 ? "s" : ""} generated — check Applications`);
+      setTimeout(() => router.push("/applications"), 1500);
+    } else {
+      showSnackbar(`${succeeded} generated, ${failed} failed`, "error");
+    }
+  }
 
   // Derived filter options
   const filterOptions = useMemo(() => {
@@ -181,7 +283,7 @@ export default function SavedJobsPage() {
     showSnackbar("Job dismissed");
   }
 
-  function handleAnalyze(job: Job) {
+  function handleAnalyzeSingle(job: Job) {
     const params = new URLSearchParams();
     if (job.description_text) params.set("jd", job.description_text);
     if (job.company_name) params.set("company", job.company_name);
@@ -241,12 +343,43 @@ export default function SavedJobsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Saved Jobs</h1>
-        <p className="text-sm text-[var(--text-muted)]">
-          Jobs you&apos;ve saved for later
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Saved Jobs</h1>
+          <p className="text-sm text-[var(--text-muted)]">
+            Jobs you&apos;ve saved for later
+          </p>
+        </div>
+        {jobs.length > 0 && (
+          <Button
+            onClick={handleBatchGenerate}
+            disabled={batchRunning}
+            className="shrink-0 gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+          >
+            {batchRunning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {batchProgress} of {batchTotal}
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Generate All Resumes
+              </>
+            )}
+          </Button>
+        )}
       </div>
+
+      {/* Batch progress bar */}
+      {batchRunning && (
+        <div className="mb-4 overflow-hidden rounded-full bg-[var(--border-subtle)] h-1.5">
+          <div
+            className="h-full bg-[var(--accent)] transition-all duration-500"
+            style={{ width: `${batchTotal ? (batchProgress / batchTotal) * 100 : 0}%` }}
+          />
+        </div>
+      )}
 
       {/* Filters & Sorting Bar */}
       {jobs.length > 0 && (
@@ -396,30 +529,56 @@ export default function SavedJobsPage() {
         <div className="space-y-3">
           {visibleJobs.map((job) => {
             const salary = formatSalary(job.salary_info);
+            const cardState = cardStates.get(job.id) ?? "idle";
+            const isProcessing = cardState === "analyzing" || cardState === "generating";
+            const isDone = cardState === "done";
+            const isError = cardState === "error";
 
             return (
-              <Card key={job.id}>
+              <Card
+                key={job.id}
+                className={`transition-all duration-300 ${isDone ? "opacity-40 scale-[0.99]" : ""} ${isProcessing ? "border-[var(--accent)]/40" : ""}`}
+              >
                 <CardContent className="p-4">
                   <div className="flex gap-3 sm:gap-4">
                     {/* Company Logo */}
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] sm:h-12 sm:w-12">
+                    <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] sm:h-12 sm:w-12">
                       {job.company_logo ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={job.company_logo}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
+                        <img src={job.company_logo} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <Building2 size={20} className="text-[var(--text-faint)]" />
+                      )}
+                      {isProcessing && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-base)]/80">
+                          <Loader2 size={16} className="animate-spin text-[var(--accent)]" />
+                        </div>
+                      )}
+                      {isDone && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--accent)]/20">
+                          <CheckCircle2 size={16} className="text-[var(--accent)]" />
+                        </div>
                       )}
                     </div>
 
                     {/* Job Info */}
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-[var(--text-primary)] leading-tight text-sm sm:text-base">
-                        {job.title || "Untitled Position"}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-[var(--text-primary)] leading-tight text-sm sm:text-base">
+                          {job.title || "Untitled Position"}
+                        </h3>
+                        {isProcessing && (
+                          <span className="text-xs text-[var(--accent)]">
+                            {cardState === "analyzing" ? "Analyzing…" : "Generating…"}
+                          </span>
+                        )}
+                        {isDone && (
+                          <span className="text-xs text-[var(--accent)]">Resume ready ✓</span>
+                        )}
+                        {isError && (
+                          <span className="text-xs text-red-500">Failed — try individually</span>
+                        )}
+                      </div>
                       <p className="text-sm text-[var(--text-muted)]">
                         {job.company_name || "Unknown Company"}
                       </p>
@@ -454,14 +613,10 @@ export default function SavedJobsPage() {
                       {(job.employment_type || job.seniority_level) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {job.employment_type && (
-                            <Badge variant="outline" className="text-xs">
-                              {job.employment_type}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs">{job.employment_type}</Badge>
                           )}
                           {job.seniority_level && (
-                            <Badge variant="outline" className="text-xs">
-                              {job.seniority_level}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs">{job.seniority_level}</Badge>
                           )}
                         </div>
                       )}
@@ -471,7 +626,8 @@ export default function SavedJobsPage() {
                     <div className="hidden flex-shrink-0 flex-col gap-1.5 sm:flex">
                       <Button
                         size="sm"
-                        onClick={() => handleAnalyze(job)}
+                        onClick={() => handleAnalyzeSingle(job)}
+                        disabled={isProcessing || batchRunning}
                         className="gap-1.5 text-xs"
                       >
                         <Sparkles size={14} />
@@ -481,6 +637,7 @@ export default function SavedJobsPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => unsaveJob(job.id)}
+                        disabled={isProcessing || batchRunning}
                         className="gap-1.5 text-xs"
                       >
                         <BookmarkCheck size={14} />
@@ -503,6 +660,7 @@ export default function SavedJobsPage() {
                           variant="ghost"
                           className="h-7 w-7 p-0 text-[var(--text-faint)] hover:text-red-500"
                           onClick={() => dismissJob(job.id)}
+                          disabled={isProcessing || batchRunning}
                           title="Dismiss"
                         >
                           <Trash2 size={14} />
@@ -515,7 +673,8 @@ export default function SavedJobsPage() {
                   <div className="mt-3 flex items-center gap-2 border-t border-[var(--border-subtle)] pt-3 sm:hidden">
                     <Button
                       size="sm"
-                      onClick={() => handleAnalyze(job)}
+                      onClick={() => handleAnalyzeSingle(job)}
+                      disabled={isProcessing || batchRunning}
                       className="flex-1 gap-1.5 text-xs"
                     >
                       <Sparkles size={14} />
@@ -525,6 +684,7 @@ export default function SavedJobsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => unsaveJob(job.id)}
+                      disabled={isProcessing || batchRunning}
                       className="gap-1.5 text-xs"
                     >
                       <BookmarkCheck size={14} />
@@ -544,6 +704,7 @@ export default function SavedJobsPage() {
                       variant="outline"
                       className="h-8 w-8 p-0 text-[var(--text-faint)] hover:text-red-500"
                       onClick={() => dismissJob(job.id)}
+                      disabled={isProcessing || batchRunning}
                     >
                       <Trash2 size={14} />
                     </Button>
