@@ -115,6 +115,7 @@ async function fetchLinkedInJob(url: string) {
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL_REASONING = "anthropic/claude-3.5-sonnet";
+const MODEL_LIGHT = "anthropic/claude-3.5-haiku";
 
 function extractJSON(text: string): string {
   const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
@@ -127,7 +128,8 @@ function extractJSON(text: string): string {
 async function chatCompletion(
   openRouterKey: string,
   messages: { role: string; content: string }[],
-  maxTokens = 4096
+  maxTokens = 4096,
+  model = MODEL_REASONING
 ): Promise<string> {
   const res = await fetch(OPENROUTER_API_URL, {
     method: "POST",
@@ -137,7 +139,7 @@ async function chatCompletion(
       "X-Title": "Mind the App",
     },
     body: JSON.stringify({
-      model: MODEL_REASONING,
+      model,
       messages,
       max_tokens: maxTokens,
       temperature: 0.3,
@@ -318,7 +320,7 @@ Respond in this exact JSON format:
 
 Return ONLY valid JSON, no markdown fences.`,
           },
-        ]);
+        ], 4096, MODEL_LIGHT);
 
         const analysis = JSON.parse(analysisText);
 

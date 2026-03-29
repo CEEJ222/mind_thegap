@@ -5,9 +5,9 @@ export const MODELS = {
   // Complex reasoning: gap analysis, resume generation
   REASONING: "anthropic/claude-3.5-sonnet",
   // Structured extraction: document parsing, URL scraping
-  EXTRACTION: "anthropic/claude-3.5-sonnet",
-  // Light tasks: single theme rescore
-  LIGHT: "anthropic/claude-3-haiku",
+  EXTRACTION: "anthropic/claude-3.5-haiku",
+  // Light tasks: single theme rescore, enrichment, summaries
+  LIGHT: "anthropic/claude-3.5-haiku",
 } as const;
 
 interface OpenRouterMessage {
