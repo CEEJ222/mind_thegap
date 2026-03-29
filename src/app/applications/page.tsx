@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
-import { Briefcase, Trash2 } from "lucide-react";
+import { Briefcase, Clock, Trash2 } from "lucide-react";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -150,25 +150,48 @@ export default function ApplicationsPage() {
 
               {/* Mobile card */}
               <CardContent className="md:hidden p-4">
-                <div className="flex items-start justify-between mb-1">
+                <div className="flex gap-3">
+                  {/* Company avatar */}
+                  <div
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #F6D365 0%, #FDA085 40%, #A18CD1 70%, #5FC3E4 100%)",
+                    }}
+                  >
+                    <span className="text-sm font-bold text-white">
+                      {(app.company_name || "?")[0].toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-[var(--text-primary)] truncate">
-                      {app.company_name || "Unknown Company"}
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold leading-tight text-[var(--text-primary)] truncate">
+                          {app.company_name || "Unknown Company"}
+                        </h3>
+                        <p className="text-sm text-[var(--text-muted)] truncate">
+                          {app.job_title || "Unknown Role"}
+                        </p>
+                      </div>
+                      {app.fit_score !== null && (
+                        <span className={cn("text-2xl font-bold flex-shrink-0 ml-3", getFitScoreColor(app.fit_score))}>
+                          {app.fit_score}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-sm text-[var(--text-muted)] truncate">
-                      {app.job_title || "Unknown Role"}
-                    </div>
-                    <div className="text-xs text-[var(--text-faint)] mt-0.5">
-                      {new Date(app.created_at).toLocaleDateString()}
+
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text-faint)]">
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {new Date(app.created_at).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
-                  {app.fit_score !== null && (
-                    <span className={cn("text-2xl font-bold flex-shrink-0 ml-3", getFitScoreColor(app.fit_score))}>
-                      {app.fit_score}
-                    </span>
-                  )}
                 </div>
-                <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+
+                {/* Actions */}
+                <div className="mt-3 flex items-center gap-2 border-t border-[var(--border-subtle)] pt-3" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={app.interview_converted}
                     onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
