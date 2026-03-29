@@ -168,7 +168,7 @@ async function updateJobStatus(supabase: any, jobId: string, status: string) {
 
 Deno.serve(async (req: Request) => {
   try {
-    const { batchId, userId } = await req.json();
+    const { batchId, userId, openRouterKey: passedKey } = await req.json();
 
     if (!batchId) {
       return new Response(JSON.stringify({ error: "Missing batchId" }), {
@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
+    const openRouterKey = passedKey || Deno.env.get("OPENROUTER_API_KEY")!;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 

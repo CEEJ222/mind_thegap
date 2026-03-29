@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${anonKey}`,
       },
-      body: JSON.stringify({ batchId: job.batch_id, userId: user.id }),
+      body: JSON.stringify({ batchId: job.batch_id, userId: user.id, openRouterKey: process.env.OPENROUTER_API_KEY }),
     }).catch((err) => {
       console.error("Failed to invoke bulk-processor for retry:", err);
     });
