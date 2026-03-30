@@ -96,6 +96,9 @@ export function ResumeReview({
           <CardTitle className="text-lg">Editorial Decisions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {(!notes.prioritized?.length && !notes.shortened?.length && !notes.omitted?.length) && (
+            <p className="text-sm text-muted-foreground">No editorial changes were recorded for this resume.</p>
+          )}
           {notes.prioritized && notes.prioritized.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-accent">

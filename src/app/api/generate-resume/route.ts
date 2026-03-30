@@ -151,7 +151,43 @@ Return ONLY valid JSON, no markdown fences.`,
       ],
     });
 
-    const result = JSON.parse(text);
+    // Strip markdown fences if the model wrapped the JSON anyway
+    let cleaned = text.trim()
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim()
+    }
+
+    // Escape literal newlines/tabs inside the resume_content string value
+    // (LLMs often emit unescaped newlines inside JSON strings)
+    cleaned = cleaned.replace(
+      /"resume_content"\s*:\s*"([\s\S]*?)"\s*,\s*"editorial_notes"/,
+      (_, content) =>
+        `"resume_content": "${content
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t')}","editorial_notes"`
+    )
+
+    // Remove remaining stray control characters (not in string values)
+    cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ')
+
+    let result: { resume_content: string; editorial_notes: Record<string, unknown> }
+    try {
+      result = JSON.parse(cleaned)
+    } catch {
+      // Fallback: extract resume_content with a targeted regex
+      const contentMatch = cleaned.match(/"resume_content"\s*:\s*"([\s\S]*?)(?<!\\)"/)
+      if (contentMatch) {
+        result = {
+          resume_content: contentMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t'),
+          editorial_notes: {}
+        }
+      } else {
+        throw new Error(`Failed to parse resume JSON: ${cleaned.slice(0, 300)}`)
+      }
+    }
 
     const format = (settings?.output_format as string) ?? "pdf";
     const filePath = `${user_id}/${application_id}_v${nextVersion}.md`;
@@ -171,7 +207,7 @@ Return ONLY valid JSON, no markdown fences.`,
         format,
         length_setting: lengthSetting,
         summary_included: includeSummary,
-        editorial_notes: { ...result.editorial_notes, resume_content: result.resume_content },
+        editorial_notes: { ...(result.editorial_notes ?? {}), resume_content: result.resume_content },
         version: nextVersion,
       })
       .select()
