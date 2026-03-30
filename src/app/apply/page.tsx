@@ -22,10 +22,11 @@ import {
   FileText,
   Sparkles,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 
 type ATSType = "lever" | "greenhouse" | "ashby";
-type Step = "input" | "loading" | "review" | "submitting" | "success" | "error";
+type Step = "input" | "loading" | "review" | "submitting" | "success" | "error" | "manual";
 
 interface FormField {
   // Lever fields
@@ -53,9 +54,11 @@ interface ParseResult {
     company?: string
     location?: string | null
     descriptionPlain: string
+    absoluteUrl?: string
   }
   formFields: FormField[]
   prefilled: Record<string, string>
+  postingUnavailable?: boolean
 }
 
 const ATS_BADGE_COLORS: Record<ATSType, string> = {
@@ -93,7 +96,9 @@ function normalizeFormFields(
     const normalized: Array<{ key: string; label: string; type: string; required: boolean; options?: Array<{ label: string; value: string }> }> = [];
     for (const q of formFields) {
       for (const field of q.fields || []) {
-        if (["resume", "cover_letter"].includes(field.name)) continue; // file fields handled separately
+        // Skip file fields and resume text-paste fields (handled via file upload separately)
+        if (field.type === "input_file") continue;
+        if (field.name === "resume" || field.name === "resume_text" || (field.name.includes("resume") && field.type !== "input_file")) continue;
         normalized.push({
           key: field.name,
           label: q.label || field.name,
@@ -141,6 +146,8 @@ export default function ApplyPage() {
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [hasResume, setHasResume] = useState<boolean | null>(null); // null = checking
   const [previewingResume, setPreviewingResume] = useState(false);
+  const [generatingResume, setGeneratingResume] = useState(false);
+  const [positionClosed, setPositionClosed] = useState(false);
 
   // Pre-fill URL from query param (job card "Apply" button) or load existing applicationId
   useEffect(() => {
@@ -263,7 +270,19 @@ export default function ApplyPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Submission failed");
+      if (!res.ok) {
+        if (res.status === 404 || data.closed) {
+          setPositionClosed(true);
+          setStep("review");
+        } else if (data.manualFallback) {
+          // Headless browser failed — let user submit manually
+          setStep("manual");
+        } else {
+          setErrorMsg(data.error || "Submission failed");
+          setStep("error");
+        }
+        return;
+      }
 
       setResumeWarning(!!data.resumeWarning);
       setStep("success");
@@ -280,6 +299,27 @@ export default function ApplyPage() {
     setErrorMsg("");
     setResumeId(null);
     setHasResume(null);
+    setPositionClosed(false);
+  }
+
+  async function handleGenerateResume() {
+    if (!parseResult || !user) return;
+    setGeneratingResume(true);
+    try {
+      const res = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: parseResult.applicationId, user_id: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Resume generation failed");
+      setResumeId(data.resume_id);
+      setHasResume(true);
+    } catch (err) {
+      console.error("Generate resume error:", err);
+    } finally {
+      setGeneratingResume(false);
+    }
   }
 
   // Loading state
@@ -298,6 +338,57 @@ export default function ApplyPage() {
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)]" />
         <p className="text-sm text-[var(--text-muted)]">Submitting your application…</p>
+      </div>
+    );
+  }
+
+  // Manual submission step (Greenhouse — requires browser-side submit)
+  if (step === "manual" && parseResult) {
+    const handleMarkApplied = async () => {
+      if (!user) return;
+      await fetch("/api/apply/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: parseResult.applicationId,
+          confirmed: true,
+          form_answers: answers,
+          manual: true,
+        }),
+      });
+      setStep("success");
+    };
+
+    return (
+      <div className="mx-auto max-w-lg py-24 text-center">
+        <ExternalLink className="mx-auto mb-4 h-12 w-12 text-[var(--accent)]" />
+        <h1 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">Complete in Greenhouse</h1>
+        <p className="mb-2 text-sm text-[var(--text-muted)]">
+          Greenhouse requires direct browser submission. The form has been opened in a new tab with your job details.
+        </p>
+        <p className="mb-6 text-sm text-[var(--text-muted)]">
+          Once you&apos;ve submitted the form, click below to mark this application as applied.
+        </p>
+        <div className="mb-6 flex gap-2 justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => window.open(parseResult.job.absoluteUrl || urlInput, "_blank")}
+          >
+            <ExternalLink size={14} />
+            Reopen Form
+          </Button>
+        </div>
+        <div className="flex gap-2 justify-center">
+          <Button onClick={handleMarkApplied} className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]">
+            <CheckCircle2 size={16} />
+            I&apos;ve Submitted
+          </Button>
+          <Button variant="outline" onClick={() => setStep("review")}>
+            Back
+          </Button>
+        </div>
       </div>
     );
   }
@@ -391,6 +482,14 @@ export default function ApplyPage() {
           </div>
         </div>
 
+        {/* Posting unavailable / closed warning */}
+        {(parseResult.postingUnavailable || positionClosed) && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-300">
+            <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+            <span>This job posting is no longer listed publicly — it may have been filled or closed. You can still attempt to submit, but the application may be rejected.</span>
+          </div>
+        )}
+
         {/* Form */}
         <Card>
           <CardHeader>
@@ -480,22 +579,22 @@ export default function ApplyPage() {
                 <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="flex-1">
                   <p className="font-medium">No resume generated for this job</p>
-                  <p className="mt-0.5 text-xs text-amber-700">Generate a tailored resume before submitting for best results.</p>
+                  <p className="mt-0.5 text-xs text-amber-700">Generate a tailored resume to attach to your application.</p>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3 gap-2 border-amber-300 text-amber-800 hover:bg-amber-100"
-                onClick={() => {
-                  const jd = encodeURIComponent(parseResult.job.descriptionPlain || "")
-                  const company = encodeURIComponent(parseResult.job.company || "")
-                  const title = encodeURIComponent(parseResult.job.title || "")
-                  router.push(`/generate?jd=${jd}&company=${company}&title=${title}&returnApplicationId=${parseResult.applicationId}`)
-                }}
+                onClick={handleGenerateResume}
+                disabled={generatingResume}
               >
-                <Sparkles size={14} />
-                Generate Resume First
+                {generatingResume ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                {generatingResume ? "Generating…" : "Generate Resume"}
               </Button>
             </div>
           )}
@@ -505,7 +604,7 @@ export default function ApplyPage() {
         <div className="mt-4 flex gap-3">
           <Button
             onClick={handleSubmit}
-            disabled={hasResume === null || hasResume === false}
+            disabled={generatingResume}
             className="flex-1 gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
             size="lg"
           >

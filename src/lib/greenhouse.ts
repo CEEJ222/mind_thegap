@@ -77,81 +77,71 @@ export async function fetchGreenhouseJob(boardToken: string, jobId: string): Pro
   }
 }
 
+function buildGreenhouseFormData(jobId: string, payload: GreenhousePayload, extra?: Record<string, string>): FormData {
+  const fd = new FormData()
+  fd.append('id', jobId)
+  fd.append('first_name', payload.firstName)
+  fd.append('last_name', payload.lastName)
+  fd.append('email', payload.email)
+  if (payload.phone) fd.append('phone', payload.phone)
+  if (payload.linkedinUrl) fd.append('linkedin_profile', payload.linkedinUrl)
+  if (payload.websiteUrl) fd.append('website', payload.websiteUrl)
+  if (payload.coverLetter) fd.append('cover_letter_text', payload.coverLetter)
+  if (payload.resumeFile) fd.append('resume', payload.resumeFile, 'resume.docx')
+  for (const [k, v] of Object.entries(payload.customAnswers || {})) fd.append(k, String(v))
+  for (const [k, v] of Object.entries(extra || {})) fd.append(k, v)
+  return fd
+}
+
 export async function submitGreenhouseApplication(
   boardToken: string,
   jobId: string,
   payload: GreenhousePayload
 ): Promise<{ ok: boolean; error?: string }> {
-  // Approach A: web form POST (no API key required)
+  // Approach A: scrape the hosted apply page for hidden tokens, then POST to its form action
   try {
-    const applyPageRes = await fetch(
-      `https://boards.greenhouse.io/${boardToken}/jobs/${jobId}`
-    )
-    const html = await applyPageRes.text()
+    const pageRes = await fetch(`https://boards.greenhouse.io/${boardToken}/jobs/${jobId}`)
+    const html = await pageRes.text()
 
-    const mappedUrlToken = html.match(/name="mapped_url_token" value="([^"]+)"/)?.[1]
-    const rawAction = html.match(/<form[^>]+action="([^"]+)"/)?.[1]
+    // Extract ALL hidden input values from the application form
+    const hiddenFields: Record<string, string> = {}
+    const hiddenRe = /name="([^"]+)"\s+(?:type="hidden"\s+)?value="([^"]*)"/g
+    let m: RegExpExecArray | null
+    while ((m = hiddenRe.exec(html)) !== null) {
+      hiddenFields[m[1]] = m[2]
+    }
 
+    // Find form action — prefer the apply/application form, not nav forms
+    const formActionMatch = html.match(/<form[^>]+id="[^"]*application[^"]*"[^>]*action="([^"]+)"/i)
+      || html.match(/<form[^>]+action="([^"]*apply[^"]*)"/i)
+      || html.match(/<form[^>]+action="([^"]+)"[^>]*method="post"/i)
+
+    const rawAction = formActionMatch?.[1]
     if (rawAction) {
-      const formAction = rawAction.startsWith('http')
-        ? rawAction
-        : `https://boards.greenhouse.io${rawAction}`
-
-      const formData = new FormData()
-      formData.append('id', jobId)
-      if (mappedUrlToken) formData.append('mapped_url_token', mappedUrlToken)
-      formData.append('first_name', payload.firstName)
-      formData.append('last_name', payload.lastName)
-      formData.append('email', payload.email)
-      formData.append('phone', payload.phone || '')
-      if (payload.linkedinUrl) formData.append('linkedin_profile', payload.linkedinUrl)
-      if (payload.websiteUrl) formData.append('website', payload.websiteUrl)
-      if (payload.coverLetter) formData.append('cover_letter_text', payload.coverLetter)
-      if (payload.resumeFile) formData.append('resume', payload.resumeFile, 'resume.pdf')
-
-      for (const [fieldName, value] of Object.entries(payload.customAnswers || {})) {
-        formData.append(fieldName, String(value))
-      }
-
-      const res = await fetch(formAction, { method: 'POST', body: formData })
+      const formAction = rawAction.startsWith('http') ? rawAction : `https://boards.greenhouse.io${rawAction}`
+      const fd = buildGreenhouseFormData(jobId, payload, hiddenFields)
+      const res = await fetch(formAction, { method: 'POST', body: fd })
+      console.log('[Greenhouse] Approach A response:', res.status, res.redirected)
       if (res.ok || res.redirected) return { ok: true }
-
       console.error('[Greenhouse] Approach A failed:', res.status)
+    } else {
+      console.warn('[Greenhouse] Approach A: no form action found')
     }
   } catch (err) {
     console.error('[Greenhouse] Approach A error:', err)
   }
 
-  // Approach B: Basic Auth with board_token as username
+  // Approach B: POST directly to boards-api (public endpoint, no auth required)
   try {
-    const credentials = btoa(`${boardToken}:`)
-    const formData = new FormData()
-    formData.append('first_name', payload.firstName)
-    formData.append('last_name', payload.lastName)
-    formData.append('email', payload.email)
-    if (payload.phone) formData.append('phone', payload.phone)
-    if (payload.linkedinUrl) formData.append('linkedin_profile', payload.linkedinUrl)
-    if (payload.coverLetter) formData.append('cover_letter_text', payload.coverLetter)
-    if (payload.resumeFile) formData.append('resume', payload.resumeFile, 'resume.pdf')
-
-    for (const [fieldName, value] of Object.entries(payload.customAnswers || {})) {
-      formData.append(fieldName, String(value))
-    }
-
+    const fd = buildGreenhouseFormData(jobId, payload)
     const res = await fetch(
       `https://boards-api.greenhouse.io/v1/boards/${boardToken}/jobs/${jobId}`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Basic ${credentials}` },
-        body: formData,
-      }
+      { method: 'POST', body: fd }
     )
-
     const body = await res.text().catch(() => '')
     console.log('[Greenhouse] Approach B response:', res.status, body.slice(0, 500))
-
     if (res.ok) return { ok: true }
-    return { ok: false, error: `Greenhouse submit error ${res.status}: ${body.slice(0, 200)}` }
+    return { ok: false, error: `Greenhouse submit error ${res.status}: ${body.slice(0, 300)}` }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return { ok: false, error: `Greenhouse submit failed: ${msg}` }

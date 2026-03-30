@@ -131,6 +131,7 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
             <option value="applied">Applied</option>
             <option value="yes">Interview</option>
             <option value="no">Rejected</option>
+            <option value="closed">Closed</option>
           </Select>
           {application.fit_score !== null && (
             <div className="text-right">

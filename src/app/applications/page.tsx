@@ -137,6 +137,7 @@ export default function ApplicationsPage() {
                     <option value="applied">Applied</option>
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
+                    <option value="closed">Closed</option>
                   </Select>
                 </div>
                 <div className="col-span-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -192,6 +193,7 @@ export default function ApplicationsPage() {
                     <option value="applied">Applied</option>
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
+                    <option value="closed">Closed</option>
                   </Select>
                   {ATS_TYPES.has(app.source_type || '') && (
                     <button

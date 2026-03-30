@@ -66,7 +66,45 @@ export async function POST(request: NextRequest) {
     let normalizedFields: Array<{ key: string; label: string }> = []
 
     if (detected.type === 'lever') {
-      const leverJob = await fetchLeverJob(detected.company, detected.jobId)
+      let leverJob
+      try {
+        leverJob = await fetchLeverJob(detected.company, detected.jobId)
+      } catch (fetchErr) {
+        const fetchMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+        // If the posting is gone from the API, fall back to cached data + standard fields
+        if (fetchMsg.includes('not found') || fetchMsg.includes('404')) {
+          console.warn(`[apply/parse] Lever posting 404 — using fallback for ${detected.company}/${detected.jobId}`)
+          // Try to find cached job description in jobs table by apply_url
+          const { data: cachedJob } = await supabase
+            .from('jobs')
+            .select('title, company_name, description_text')
+            .eq('apply_url', url)
+            .maybeSingle()
+          const standardFields = [
+            { name: 'name', type: 'text', required: true, label: 'Full Name' },
+            { name: 'email', type: 'email', required: true, label: 'Email' },
+            { name: 'phone', type: 'tel', required: false, label: 'Phone' },
+            { name: 'org', type: 'text', required: false, label: 'Current Company' },
+            { name: 'linkedin', type: 'url', required: false, label: 'LinkedIn Profile' },
+            { name: 'github', type: 'url', required: false, label: 'GitHub' },
+            { name: 'portfolio', type: 'url', required: false, label: 'Portfolio / Website' },
+            { name: 'resume', type: 'file', required: false, label: 'Resume' },
+            { name: 'coverLetter', type: 'textarea', required: false, label: 'Cover Letter' },
+          ]
+          leverJob = {
+            title: cachedJob?.title || 'Position',
+            company: cachedJob?.company_name || detected.company,
+            location: null,
+            descriptionPlain: cachedJob?.description_text || '',
+            descriptionHtml: '',
+            absoluteUrl: url,
+            formFields: standardFields,
+            _postingUnavailable: true,
+          }
+        } else {
+          throw fetchErr
+        }
+      }
       job = leverJob
       formFields = leverJob.formFields
       jdText = leverJob.descriptionPlain
@@ -79,7 +117,11 @@ export async function POST(request: NextRequest) {
       jdText = ghJob.descriptionPlain
       baseAnswers = prefillGreenhousePayload(contact) as Record<string, string>
       normalizedFields = ghJob.questions.flatMap((q) =>
-        (q.fields || []).map((f) => ({ key: f.name, label: q.label || f.name }))
+        (q.fields || []).map((f) => ({
+          key: f.name,
+          label: q.label || f.name,
+          options: f.values?.map((v) => ({ label: String(v.label), value: String(v.value) })),
+        }))
       )
     } else if (detected.type === 'ashby') {
       const ashbyJob = await fetchAshbyJob(detected.company, detected.jobId)
@@ -95,27 +137,72 @@ export async function POST(request: NextRequest) {
     // Merge base prefill with smart question matching
     const prefilled = buildSmartAnswers(normalizedFields, contact, baseAnswers || {})
 
-    // Create a draft applications row
-    const { data: appRow, error: appError } = await supabase
-      .from('applications')
-      .insert({
-        user_id,
-        jd_text: jdText || ' ',
-        company_name: (job as { company?: string }).company || detected.company,
-        job_title: job.title || null,
-        source_url: url,
-        source_type: detected.type,
-        ats_job_id: detected.jobId,
-        ats_board_token: detected.company,
-        form_answers: prefilled as Record<string, unknown>,
-        ats_status: 'draft',
-      })
-      .select('id, company_name, job_title')
-      .single()
+    const companyName = (job as { company?: string }).company || detected.company
+    const jobTitle = job.title || null
 
-    if (appError) {
-      console.error('[apply/parse] Failed to create application:', appError)
-      return NextResponse.json({ error: 'Failed to save application draft' }, { status: 500 })
+    // Reuse existing row: check by ats_job_id first, then fall back to company+title match
+    // (analyze route creates rows by company+title; we want to share the same row)
+    const { data: existingByAts } = await supabase
+      .from('applications')
+      .select('id, company_name, job_title')
+      .eq('user_id', user_id)
+      .eq('ats_job_id', detected.jobId)
+      .limit(1)
+      .maybeSingle()
+
+    const { data: existingByName } = !existingByAts && jobTitle
+      ? await supabase
+          .from('applications')
+          .select('id, company_name, job_title')
+          .eq('user_id', user_id)
+          .ilike('company_name', companyName)
+          .ilike('job_title', jobTitle)
+          .limit(1)
+          .maybeSingle()
+      : { data: null }
+
+    const existing = existingByAts || existingByName
+
+    let appRow: { id: string; company_name: string | null; job_title: string | null }
+
+    if (existing) {
+      await supabase
+        .from('applications')
+        .update({
+          jd_text: jdText || ' ',
+          form_answers: prefilled as Record<string, unknown>,
+          source_url: url,
+          source_type: detected.type,
+          ats_job_id: detected.jobId,
+          ats_board_token: detected.company,
+          ...(existing.company_name ? {} : { company_name: companyName }),
+          ...(existing.job_title ? {} : { job_title: jobTitle }),
+        })
+        .eq('id', existing.id)
+      appRow = existing
+    } else {
+      const { data: inserted, error: appError } = await supabase
+        .from('applications')
+        .insert({
+          user_id,
+          jd_text: jdText || ' ',
+          company_name: companyName,
+          job_title: jobTitle,
+          source_url: url,
+          source_type: detected.type,
+          ats_job_id: detected.jobId,
+          ats_board_token: detected.company,
+          form_answers: prefilled as Record<string, unknown>,
+          ats_status: 'draft',
+        })
+        .select('id, company_name, job_title')
+        .single()
+
+      if (appError || !inserted) {
+        console.error('[apply/parse] Failed to create application:', appError)
+        return NextResponse.json({ error: 'Failed to save application draft' }, { status: 500 })
+      }
+      appRow = inserted
     }
 
     return NextResponse.json({
@@ -127,10 +214,13 @@ export async function POST(request: NextRequest) {
       },
       formFields,
       prefilled,
+      postingUnavailable: !!(job as { _postingUnavailable?: boolean })._postingUnavailable,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[apply/parse] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Surface 404s from ATS APIs as 404, not 500
+    const status = message.includes('not found') || message.includes('404') ? 404 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

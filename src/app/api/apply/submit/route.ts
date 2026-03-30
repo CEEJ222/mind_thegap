@@ -1,17 +1,20 @@
+export const runtime = 'nodejs'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { submitLeverApplication, type LeverPayload } from '@/lib/lever'
-import { submitGreenhouseApplication, type GreenhousePayload } from '@/lib/greenhouse'
+import { submitGreenhouseHeadless } from '@/lib/greenhouse-headless'
 import { submitAshbyApplication, type AshbyPayload } from '@/lib/ashby'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { applicationId, confirmed, form_answers, resume_id } = body as {
+    const { applicationId, confirmed, form_answers, resume_id, manual } = body as {
       applicationId: string
       confirmed: boolean
       form_answers: Record<string, unknown>
       resume_id?: string
+      manual?: boolean
     }
 
     if (!applicationId || !confirmed) {
@@ -19,6 +22,16 @@ export async function POST(request: NextRequest) {
         { error: 'applicationId and confirmed:true are required' },
         { status: 400 }
       )
+    }
+
+    // Manual submission (e.g. Greenhouse — user submitted in browser, just mark as applied)
+    if (manual) {
+      const supabase = createServiceClient()
+      await supabase
+        .from('applications')
+        .update({ ats_status: 'submitted', interview_converted: 'applied', ats_submitted_at: new Date().toISOString() })
+        .eq('id', applicationId)
+      return NextResponse.json({ ok: true })
     }
 
     const supabase = createServiceClient()
@@ -89,21 +102,14 @@ export async function POST(request: NextRequest) {
       }
       result = await submitLeverApplication(boardToken, jobId, payload)
     } else if (atsType === 'greenhouse') {
-      // form_answers uses snake_case Greenhouse field names; map to GreenhousePayload
-      const systemKeys = new Set(['first_name', 'last_name', 'email', 'phone', 'linkedin_profile', 'website', 'cover_letter_text'])
-      const payload: GreenhousePayload = {
-        firstName: fa.first_name || '',
-        lastName: fa.last_name || '',
-        email: fa.email || '',
-        phone: fa.phone || undefined,
-        linkedinUrl: fa.linkedin_profile || undefined,
-        websiteUrl: fa.website || undefined,
-        coverLetter: fa.cover_letter_text || undefined,
-        customAnswers: Object.fromEntries(Object.entries(fa).filter(([k]) => !systemKeys.has(k))),
-        resumeFile: resumeBlob,
-      }
-      console.log('[apply/submit] Greenhouse payload firstName/lastName:', payload.firstName, payload.lastName)
-      result = await submitGreenhouseApplication(boardToken, jobId, payload)
+      // Use headless browser — Greenhouse's API requires company credentials for POST
+      const jobUrl = app.source_url || `https://boards.greenhouse.io/${boardToken}/jobs/${jobId}`
+      const resumeBuffer = resumeBlob ? Buffer.from(await resumeBlob.arrayBuffer()) : undefined
+      result = await submitGreenhouseHeadless(jobUrl, {
+        formAnswers: fa,
+        resumeBuffer,
+        resumeFileName: resumeBuffer ? 'resume.pdf' : undefined,
+      })
     } else if (atsType === 'ashby') {
       // form_answers uses camelCase Ashby field names; extras are custom field paths
       const systemKeys = new Set(['name', 'email', 'phone', 'linkedinUrl', 'websiteUrl', 'coverLetter'])
@@ -122,24 +128,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unsupported ATS type: ${atsType}` }, { status: 400 })
     }
 
+    // Detect closed/removed postings (404 from ATS)
+    const isClosed = !result.ok && (result.error || '').includes('404')
+
     // Update application status
     const now = new Date().toISOString()
     await supabase
       .from('applications')
       .update({
-        ats_status: result.ok ? 'submitted' : 'failed',
+        ats_status: result.ok ? 'submitted' : (isClosed ? 'closed' : 'failed'),
         ats_submitted_at: result.ok ? now : null,
         ats_submission_response: result as unknown as Record<string, unknown>,
         ats_error_message: result.ok ? null : (result.error || 'Unknown error'),
-        ...(result.ok ? { interview_converted: 'applied' } : {}),
+        ...(result.ok ? { interview_converted: 'applied' } : isClosed ? { interview_converted: 'closed' } : {}),
       } as Record<string, unknown>)
       .eq('id', applicationId)
 
     if (!result.ok) {
       console.error(`[apply/submit] ATS submission failed (${atsType}):`, result.error)
       return NextResponse.json(
-        { error: result.error || 'Submission failed', resumeWarning: result.resumeWarning },
-        { status: 502 }
+        {
+          error: result.error || 'Submission failed',
+          resumeWarning: result.resumeWarning,
+          closed: isClosed,
+          // For Greenhouse headless failures, signal the UI to fall back to manual
+          manualFallback: atsType === 'greenhouse' && !isClosed,
+        },
+        { status: isClosed ? 404 : 502 }
       )
     }
 

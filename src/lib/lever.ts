@@ -52,7 +52,12 @@ function stripHtml(html: string): string {
 
 export async function fetchLeverJob(company: string, jobId: string): Promise<LeverJob> {
   const res = await fetch(`https://api.lever.co/v0/postings/${company}/${jobId}`)
-  if (!res.ok) throw new Error(`Lever API error: ${res.status}`)
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`This Lever job posting was not found (${company}/${jobId}). It may have been filled or removed.`)
+    }
+    throw new Error(`Lever API error: ${res.status}`)
+  }
   const data = await res.json()
 
   // Fetch form fields from the apply endpoint

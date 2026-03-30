@@ -36,19 +36,20 @@ export function prefillLeverPayload(contact: UserContactInfo): Partial<LeverPayl
   }
 }
 
-export function prefillGreenhousePayload(contact: UserContactInfo): Partial<GreenhousePayload> {
+export function prefillGreenhousePayload(contact: UserContactInfo): Record<string, string> {
   const { firstName, lastName } = contact.fullName
     ? splitName(contact.fullName)
     : { firstName: '', lastName: '' }
 
-  return {
-    firstName: firstName || undefined,
-    lastName: lastName || undefined,
-    email: contact.email || undefined,
-    phone: contact.phone || undefined,
-    linkedinUrl: contact.linkedinUrl || undefined,
-    websiteUrl: contact.websiteUrl || undefined,
-  }
+  // Keys must match Greenhouse field names (snake_case)
+  const result: Record<string, string> = {}
+  if (firstName) result['first_name'] = firstName
+  if (lastName) result['last_name'] = lastName
+  if (contact.email) result['email'] = contact.email
+  if (contact.phone) result['phone'] = contact.phone
+  if (contact.linkedinUrl) result['linkedin_profile'] = contact.linkedinUrl
+  if (contact.websiteUrl) result['website'] = contact.websiteUrl
+  return result
 }
 
 export function prefillAshbyPayload(contact: UserContactInfo): Partial<AshbyPayload> {
@@ -174,10 +175,11 @@ export function smartPrefillAnswer(
 
 /**
  * Build a full set of pre-filled answers for a normalized form field list.
- * Each field has { key, label }.
+ * Each field has { key, label, options? }.
+ * For select fields, resolves label strings to their option value (e.g. "Yes" → "1").
  */
 export function buildSmartAnswers(
-  fields: Array<{ key: string; label: string }>,
+  fields: Array<{ key: string; label: string; options?: Array<{ label: string; value: string }> }>,
   contact: UserContactInfo,
   base: Record<string, string>
 ): Record<string, string> {
@@ -187,7 +189,15 @@ export function buildSmartAnswers(
     // Don't overwrite already-prefilled values
     if (answers[field.key]) continue
     const smart = smartPrefillAnswer(field.label, contact)
-    if (smart !== null) {
+    if (smart === null) continue
+
+    if (field.options && field.options.length > 0 && smart !== '') {
+      // Resolve the human-readable label to the option's value
+      const match = field.options.find(
+        (o) => o.label.toLowerCase() === smart.toLowerCase()
+      )
+      answers[field.key] = match ? match.value : smart
+    } else {
       answers[field.key] = smart
     }
   }
