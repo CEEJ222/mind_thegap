@@ -52,11 +52,21 @@ export function MergeEntries({ entries, chunks, onComplete, onCancel }: Props) {
         keptChunks.map((c: any) => c.chunk_text.toLowerCase().trim())
       );
 
+      // Get the kept entry's metadata to sync denormalized fields on moved chunks
+      const keptEntry = entries.find((e: { id: string }) => e.id === keepId);
+
       for (const chunk of chunksToMove) {
         if (!keptTexts.has(chunk.chunk_text.toLowerCase().trim())) {
+          // Move chunk AND sync denormalized fields to match the kept entry
           await supabase
             .from("profile_chunks")
-            .update({ entry_id: keepId })
+            .update({
+              entry_id: keepId,
+              company_name: keptEntry?.company_name ?? chunk.company_name,
+              job_title: keptEntry?.job_title ?? chunk.job_title,
+              date_start: keptEntry?.date_start ?? chunk.date_start,
+              date_end: keptEntry?.date_end ?? chunk.date_end,
+            })
             .eq("id", chunk.id);
         } else {
           // Duplicate — delete it

@@ -185,7 +185,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 1: Extract entries from document
+    // Step 1: Fetch existing entries FIRST so we can tell the AI about them
+    const { data: existingEntries } = await supabase
+      .from("profile_entries")
+      .select("id, company_name, job_title, entry_type, date_start, date_end, user_confirmed")
+      .eq("user_id", user_id);
+
+    // Build a list of existing entry names for the AI to match against
+    const existingNames = (existingEntries ?? [])
+      .map((e: Record<string, string>) =>
+        `- ${e.company_name}${e.job_title ? ` (${e.job_title})` : ""} [${e.entry_type}]`
+      )
+      .join("\n");
+
+    // Step 2: Extract entries from document
     const aiResponse = await chatCompletion({
       model: MODELS.EXTRACTION,
       messages: [
@@ -196,7 +209,12 @@ export async function POST(request: NextRequest) {
 ## Document: ${file_name || "Pasted content"}
 ## Content:
 ${text}
+${existingNames ? `
+## Existing Profile Entries (use these names when the content refers to the same company/project)
+${existingNames}
 
+IMPORTANT: If the document describes work at a company or project that matches one of the existing entries above, you MUST use the EXACT same company_name from the existing entry. For example, if "SENSER" exists and the document mentions "Survey Insights (now SENSER)" or describes SENSER's product, use "SENSER" as the company_name. Do NOT invent new names like "Personal Project" — use the actual project/company name.
+` : ""}
 ## Instructions
 1. Classify the document type: resume, project_writeup, biz_case, award, certification, performance_review, or other.
 2. Extract each distinct job, project, education entry, award, or certification.
@@ -237,12 +255,6 @@ Return ONLY valid JSON.`,
         .eq("file_path", file_path);
     }
 
-    // Step 2: Get existing entries for deterministic fuzzy matching
-    const { data: existingEntries } = await supabase
-      .from("profile_entries")
-      .select("id, company_name, job_title, entry_type, date_start, date_end, user_confirmed")
-      .eq("user_id", user_id);
-
     const existingList: EntryInfo[] = (existingEntries ?? []).map((e: Record<string, string>) => ({
       id: e.id,
       company_name: e.company_name || "",
@@ -266,10 +278,29 @@ Return ONLY valid JSON.`,
       );
 
       let entryId: string;
+      // Use the matched entry's metadata for chunk denormalization, not the AI-extracted names
+      let chunkMeta = {
+        company_name: entry.company_name,
+        job_title: entry.job_title,
+        date_start: entry.date_start,
+        date_end: entry.date_end,
+        entry_type: entry.entry_type,
+      };
 
       if (matchId) {
         // Matched existing entry — merge chunks into it
         entryId = matchId;
+        // Use the existing entry's metadata so chunks stay in sync
+        const matched = existingList.find(e => e.id === matchId);
+        if (matched) {
+          chunkMeta = {
+            company_name: matched.company_name,
+            job_title: matched.job_title,
+            date_start: matched.date_start,
+            date_end: matched.date_end,
+            entry_type: matched.entry_type,
+          };
+        }
       } else {
         // No match — create new entry
         entryId = await createNewEntry(supabase, user_id, entry, docId);
@@ -302,13 +333,13 @@ Return ONLY valid JSON.`,
             user_id,
             entry_id: entryId,
             chunk_text: chunkText,
-            company_name: entry.company_name,
-            job_title: entry.job_title,
-            date_start: entry.date_start,
-            date_end: entry.date_end,
+            company_name: chunkMeta.company_name,
+            job_title: chunkMeta.job_title,
+            date_start: chunkMeta.date_start,
+            date_end: chunkMeta.date_end,
             industry: entry.industry,
             domain: entry.domain,
-            entry_type: entry.entry_type,
+            entry_type: chunkMeta.entry_type,
             source: "resume_upload",
           });
         }
