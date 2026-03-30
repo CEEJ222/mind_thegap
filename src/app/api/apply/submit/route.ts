@@ -69,19 +69,54 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const fa = form_answers as Record<string, string>
     let result: { ok: boolean; applicationId?: string; resumeWarning?: boolean; error?: string }
 
     if (atsType === 'lever') {
-      const payload = form_answers as unknown as LeverPayload
-      if (resumeBlob) payload.resumeFile = resumeBlob
+      // form_answers keys match LeverPayload field names; extras go into customAnswers
+      const systemKeys = new Set(['name', 'email', 'phone', 'org', 'linkedin', 'github', 'portfolio', 'coverLetter'])
+      const payload: LeverPayload = {
+        name: fa.name || '',
+        email: fa.email || '',
+        phone: fa.phone || undefined,
+        org: fa.org || undefined,
+        linkedin: fa.linkedin || undefined,
+        github: fa.github || undefined,
+        portfolio: fa.portfolio || undefined,
+        coverLetter: fa.coverLetter || undefined,
+        customAnswers: Object.fromEntries(Object.entries(fa).filter(([k]) => !systemKeys.has(k))),
+        resumeFile: resumeBlob,
+      }
       result = await submitLeverApplication(boardToken, jobId, payload)
     } else if (atsType === 'greenhouse') {
-      const payload = form_answers as unknown as GreenhousePayload
-      if (resumeBlob) payload.resumeFile = resumeBlob
+      // form_answers uses snake_case Greenhouse field names; map to GreenhousePayload
+      const systemKeys = new Set(['first_name', 'last_name', 'email', 'phone', 'linkedin_profile', 'website', 'cover_letter_text'])
+      const payload: GreenhousePayload = {
+        firstName: fa.first_name || '',
+        lastName: fa.last_name || '',
+        email: fa.email || '',
+        phone: fa.phone || undefined,
+        linkedinUrl: fa.linkedin_profile || undefined,
+        websiteUrl: fa.website || undefined,
+        coverLetter: fa.cover_letter_text || undefined,
+        customAnswers: Object.fromEntries(Object.entries(fa).filter(([k]) => !systemKeys.has(k))),
+        resumeFile: resumeBlob,
+      }
+      console.log('[apply/submit] Greenhouse payload firstName/lastName:', payload.firstName, payload.lastName)
       result = await submitGreenhouseApplication(boardToken, jobId, payload)
     } else if (atsType === 'ashby') {
-      const payload = form_answers as unknown as AshbyPayload
-      if (resumeBlob) payload.resumeFile = resumeBlob
+      // form_answers uses camelCase Ashby field names; extras are custom field paths
+      const systemKeys = new Set(['name', 'email', 'phone', 'linkedinUrl', 'websiteUrl', 'coverLetter'])
+      const payload: AshbyPayload = {
+        name: fa.name || '',
+        email: fa.email || '',
+        phone: fa.phone || undefined,
+        linkedinUrl: fa.linkedinUrl || undefined,
+        websiteUrl: fa.websiteUrl || undefined,
+        coverLetter: fa.coverLetter || undefined,
+        customAnswers: Object.fromEntries(Object.entries(fa).filter(([k]) => !systemKeys.has(k))),
+        resumeFile: resumeBlob,
+      }
       result = await submitAshbyApplication(jobId, payload)
     } else {
       return NextResponse.json({ error: `Unsupported ATS type: ${atsType}` }, { status: 400 })
@@ -101,6 +136,7 @@ export async function POST(request: NextRequest) {
       .eq('id', applicationId)
 
     if (!result.ok) {
+      console.error(`[apply/submit] ATS submission failed (${atsType}):`, result.error)
       return NextResponse.json(
         { error: result.error || 'Submission failed', resumeWarning: result.resumeWarning },
         { status: 502 }
