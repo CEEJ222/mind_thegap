@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,7 @@ import {
   Building2,
   FileText,
   Sparkles,
+  Eye,
 } from "lucide-react";
 
 type ATSType = "lever" | "greenhouse" | "ashby";
@@ -138,6 +140,7 @@ export default function ApplyPage() {
   const [resumeWarning, setResumeWarning] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [hasResume, setHasResume] = useState<boolean | null>(null); // null = checking
+  const [previewingResume, setPreviewingResume] = useState(false);
 
   // Pre-fill URL from query param (job card "Apply" button) or load existing applicationId
   useEffect(() => {
@@ -350,6 +353,9 @@ export default function ApplyPage() {
 
     return (
       <div className="mx-auto max-w-2xl px-4 pb-16">
+        {previewingResume && resumeId && (
+          <ResumePreviewModal resumeId={resumeId} onClose={() => setPreviewingResume(false)} />
+        )}
         {/* Header */}
         <div className="mb-6 flex items-start gap-3">
           <button
@@ -454,9 +460,18 @@ export default function ApplyPage() {
             </div>
           )}
           {hasResume === true && (
-            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Resume ready — will be attached to your application.
+            <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3">
+              <div className="flex items-center gap-2 text-sm text-green-800">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Resume ready — will be attached to your application.
+              </div>
+              <button
+                onClick={() => setPreviewingResume(true)}
+                className="flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-900"
+              >
+                <Eye size={13} />
+                Preview
+              </button>
             </div>
           )}
           {hasResume === false && (

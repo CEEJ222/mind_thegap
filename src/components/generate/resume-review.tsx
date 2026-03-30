@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { Download, RefreshCw, Plus, Send } from "lucide-react";
+import { Download, RefreshCw, Plus, Send, Eye } from "lucide-react";
+import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
 
 interface ResumeResult {
   resume_id: string;
@@ -40,6 +41,7 @@ export function ResumeReview({
 }: Props) {
   const notes = resume.editorial_notes;
   const [downloading, setDownloading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   async function handleDownload() {
     if (!resume.file_path) return;
@@ -78,6 +80,9 @@ export function ResumeReview({
 
   return (
     <div className="mx-auto max-w-3xl">
+      {previewing && (
+        <ResumePreviewModal resumeId={resume.resume_id} onClose={() => setPreviewing(false)} />
+      )}
       <div className="mb-6">
         <h1 className="text-xl font-bold md:text-2xl">Resume Ready</h1>
         <p className="text-muted-foreground">
@@ -135,6 +140,10 @@ export function ResumeReview({
       </Card>
 
       <div className="flex flex-wrap gap-3">
+        <Button variant="outline" onClick={() => setPreviewing(true)} className="gap-2">
+          <Eye className="h-4 w-4" />
+          Preview
+        </Button>
         {onReturnToApplication && (
           <Button onClick={onReturnToApplication} size="lg" className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]">
             <Send className="h-4 w-4" />
