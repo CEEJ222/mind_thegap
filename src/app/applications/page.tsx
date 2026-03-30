@@ -133,7 +133,8 @@ export default function ApplicationsPage() {
                     onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
                     className="h-8 text-xs"
                   >
-                    <option value="pending">Pending</option>
+                    <option value="pending">Created</option>
+                    <option value="applied">Applied</option>
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
                   </Select>
@@ -187,7 +188,8 @@ export default function ApplicationsPage() {
                     onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
                     className="h-auto py-1.5 text-xs leading-normal flex-1 min-w-0"
                   >
-                    <option value="pending">Pending</option>
+                    <option value="pending">Created</option>
+                    <option value="applied">Applied</option>
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
                   </Select>

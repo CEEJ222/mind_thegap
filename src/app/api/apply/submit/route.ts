@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
         ats_submitted_at: result.ok ? now : null,
         ats_submission_response: result as unknown as Record<string, unknown>,
         ats_error_message: result.ok ? null : (result.error || 'Unknown error'),
+        ...(result.ok ? { interview_converted: 'applied' } : {}),
       } as Record<string, unknown>)
       .eq('id', applicationId)
 
