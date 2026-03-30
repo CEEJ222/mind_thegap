@@ -8,6 +8,7 @@ import {
   prefillLeverPayload,
   prefillGreenhousePayload,
   prefillAshbyPayload,
+  buildSmartAnswers,
   type UserContactInfo,
 } from '@/lib/prefill'
 
@@ -31,10 +32,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // Fetch user contact info for prefill
+    // Fetch full user settings for prefill
     const { data: settings } = await supabase
       .from('user_settings')
-      .select('full_name, email, phone, linkedin_url, location')
+      .select('full_name, preferred_name, email, phone, linkedin_url, github_url, website_url, location, work_authorization, requires_sponsorship, open_to_relocation, available_start_date, desired_compensation')
       .eq('user_id', user_id)
       .single()
 
@@ -46,36 +47,53 @@ export async function POST(request: NextRequest) {
 
     const contact: UserContactInfo = {
       fullName: settings?.full_name || userRow?.full_name || null,
+      preferredName: settings?.preferred_name || null,
       email: settings?.email || userRow?.email || null,
       phone: settings?.phone || null,
       linkedinUrl: settings?.linkedin_url || null,
+      githubUrl: settings?.github_url || null,
+      websiteUrl: settings?.website_url || null,
       location: settings?.location || null,
+      workAuthorization: settings?.work_authorization || null,
+      requiresSponsorship: settings?.requires_sponsorship || null,
+      openToRelocation: settings?.open_to_relocation || null,
+      availableStartDate: settings?.available_start_date || null,
+      desiredCompensation: settings?.desired_compensation || null,
     }
 
     // Fetch job data and form fields based on ATS type
-    let job, formFields, prefilled, jdText
+    let job, formFields, baseAnswers, jdText
+    let normalizedFields: Array<{ key: string; label: string }> = []
 
     if (detected.type === 'lever') {
       const leverJob = await fetchLeverJob(detected.company, detected.jobId)
       job = leverJob
       formFields = leverJob.formFields
       jdText = leverJob.descriptionPlain
-      prefilled = prefillLeverPayload(contact)
+      baseAnswers = prefillLeverPayload(contact) as Record<string, string>
+      normalizedFields = leverJob.formFields.map((f) => ({ key: f.name!, label: f.label! }))
     } else if (detected.type === 'greenhouse') {
       const ghJob = await fetchGreenhouseJob(detected.company, detected.jobId)
       job = ghJob
       formFields = ghJob.questions
       jdText = ghJob.descriptionPlain
-      prefilled = prefillGreenhousePayload(contact)
+      baseAnswers = prefillGreenhousePayload(contact) as Record<string, string>
+      normalizedFields = ghJob.questions.flatMap((q) =>
+        (q.fields || []).map((f) => ({ key: f.name, label: q.label || f.name }))
+      )
     } else if (detected.type === 'ashby') {
       const ashbyJob = await fetchAshbyJob(detected.company, detected.jobId)
       job = ashbyJob
       formFields = ashbyJob.formFields
       jdText = ashbyJob.descriptionPlain
-      prefilled = prefillAshbyPayload(contact)
+      baseAnswers = prefillAshbyPayload(contact) as Record<string, string>
+      normalizedFields = ashbyJob.formFields.map((f) => ({ key: f.path!, label: f.label || f.path! }))
     } else {
       return NextResponse.json({ error: 'Unsupported ATS type' }, { status: 400 })
     }
+
+    // Merge base prefill with smart question matching
+    const prefilled = buildSmartAnswers(normalizedFields, contact, baseAnswers || {})
 
     // Create a draft applications row
     const { data: appRow, error: appError } = await supabase

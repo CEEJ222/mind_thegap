@@ -13,10 +13,18 @@ import { Key, Loader2, Trash2, ExternalLink } from "lucide-react";
 interface Settings {
   id: string;
   full_name: string;
+  preferred_name: string;
   linkedin_url: string;
+  github_url: string;
+  website_url: string;
   email: string;
   phone: string;
   location: string;
+  work_authorization: string;
+  requires_sponsorship: string;
+  open_to_relocation: string;
+  available_start_date: string;
+  desired_compensation: string;
   output_format: string;
   include_summary: boolean;
   resume_length: string;
@@ -159,7 +167,10 @@ export default function SettingsPage() {
       .from("user_settings")
       .update({
         full_name: localSettings.full_name || null,
+        preferred_name: localSettings.preferred_name || null,
         linkedin_url: localSettings.linkedin_url || null,
+        github_url: localSettings.github_url || null,
+        website_url: localSettings.website_url || null,
         email: localSettings.email || null,
         phone: localSettings.phone || null,
         location: localSettings.location || null,
@@ -171,6 +182,29 @@ export default function SettingsPage() {
     } else {
       await refreshSettings();
       showSnackbar("Contact info saved");
+    }
+    setSaving(false);
+  }
+
+  async function saveApplicationPrefs() {
+    if (!localSettings) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("user_settings")
+      .update({
+        work_authorization: localSettings.work_authorization || null,
+        requires_sponsorship: localSettings.requires_sponsorship || null,
+        open_to_relocation: localSettings.open_to_relocation || null,
+        available_start_date: localSettings.available_start_date || null,
+        desired_compensation: localSettings.desired_compensation || null,
+      })
+      .eq("id", localSettings.id);
+
+    if (error) {
+      showSnackbar("Failed to save", "error");
+    } else {
+      await refreshSettings();
+      showSnackbar("Application preferences saved");
     }
     setSaving(false);
   }
@@ -200,14 +234,27 @@ export default function SettingsPage() {
             <CardTitle className="text-lg">Contact Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Full Name</label>
-              <Input
-                value={localSettings.full_name || ""}
-                onChange={(e) => setLocalSettings({ ...localSettings, full_name: e.target.value })}
-                placeholder="C.J. Britz"
-                className="border-[var(--border-input)] bg-[var(--bg-card)]"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Full Name</label>
+                <Input
+                  value={localSettings.full_name || ""}
+                  onChange={(e) => setLocalSettings({ ...localSettings, full_name: e.target.value })}
+                  placeholder="C.J. Britz"
+                  className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                />
+                <p className="mt-1 text-xs text-[var(--text-faint)]">Auto-split into first &amp; last name on applications</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Preferred First Name</label>
+                <Input
+                  value={localSettings.preferred_name || ""}
+                  onChange={(e) => setLocalSettings({ ...localSettings, preferred_name: e.target.value })}
+                  placeholder="C.J."
+                  className="border-[var(--border-input)] bg-[var(--bg-card)]"
+                />
+                <p className="mt-1 text-xs text-[var(--text-faint)]">Used when a form asks for preferred name</p>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Email</label>
@@ -240,6 +287,26 @@ export default function SettingsPage() {
               />
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">GitHub URL</label>
+              <Input
+                type="url"
+                value={localSettings.github_url || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, github_url: e.target.value })}
+                placeholder="https://github.com/username"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Website / Portfolio</label>
+              <Input
+                type="url"
+                value={localSettings.website_url || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, website_url: e.target.value })}
+                placeholder="https://yoursite.com"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">Location</label>
               <Input
                 value={localSettings.location || ""}
@@ -250,6 +317,85 @@ export default function SettingsPage() {
             </div>
             <Button onClick={saveContactInfo} disabled={saving} className="mt-2">
               {saving ? "Saving..." : "Save Contact Info"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Application Preferences */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Application Preferences</CardTitle>
+            <p className="text-xs text-[var(--text-muted)]">Pre-fill common application questions automatically.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">
+                Legally authorized to work in the US?
+              </label>
+              <Select
+                value={localSettings.work_authorization || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, work_authorization: e.target.value })}
+              >
+                <option value="">Select…</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">
+                Will you require sponsorship?
+              </label>
+              <Select
+                value={localSettings.requires_sponsorship || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, requires_sponsorship: e.target.value })}
+              >
+                <option value="">Select…</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">
+                Open to relocation?
+              </label>
+              <Select
+                value={localSettings.open_to_relocation || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, open_to_relocation: e.target.value })}
+              >
+                <option value="">Select…</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">
+                Available start date
+              </label>
+              <Input
+                value={localSettings.available_start_date || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, available_start_date: e.target.value })}
+                placeholder="Immediately / 2 weeks notice / March 2026"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-muted)]">
+                Desired compensation
+              </label>
+              <Input
+                value={localSettings.desired_compensation || ""}
+                onChange={(e) => setLocalSettings({ ...localSettings, desired_compensation: e.target.value })}
+                placeholder="$150,000 / Negotiable"
+                className="border-[var(--border-input)] bg-[var(--bg-card)]"
+              />
+            </div>
+            <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] p-3 text-xs text-[var(--text-muted)] space-y-1">
+              <p className="font-medium text-[var(--text-primary)]">Auto-answered questions</p>
+              <p>• &quot;How did you hear about us?&quot; → <span className="text-[var(--text-primary)]">Other</span></p>
+              <p>• Referral / &quot;who referred you?&quot; → <span className="text-[var(--text-primary)]">left blank</span></p>
+            </div>
+            <Button onClick={saveApplicationPrefs} disabled={saving} className="mt-2">
+              {saving ? "Saving..." : "Save Preferences"}
             </Button>
           </CardContent>
         </Card>

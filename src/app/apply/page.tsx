@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +18,8 @@ import {
   Link2,
   MapPin,
   Building2,
+  FileText,
+  Sparkles,
 } from "lucide-react";
 
 type ATSType = "lever" | "greenhouse" | "ashby";
@@ -125,6 +128,7 @@ export default function ApplyPage() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const supabase = createClient();
 
   const [step, setStep] = useState<Step>("input");
   const [urlInput, setUrlInput] = useState("");
@@ -132,16 +136,49 @@ export default function ApplyPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [errorMsg, setErrorMsg] = useState("");
   const [resumeWarning, setResumeWarning] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const [hasResume, setHasResume] = useState<boolean | null>(null); // null = checking
 
-  // Pre-fill URL from query param (from job card "Apply" button)
+  // Pre-fill URL from query param (job card "Apply" button) or load existing applicationId
   useEffect(() => {
     const urlParam = searchParams.get("url");
-    if (urlParam) {
+    const appIdParam = searchParams.get("applicationId");
+    const resumeIdParam = searchParams.get("resume_id");
+
+    if (resumeIdParam) {
+      setResumeId(resumeIdParam);
+    }
+
+    if (appIdParam) {
+      // Restore existing draft by re-fetching form fields
+      handleParseById(appIdParam);
+    } else if (urlParam) {
       setUrlInput(urlParam);
       handleParse(urlParam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Check for existing resume whenever we have a parsed applicationId
+  useEffect(() => {
+    const appId = parseResult?.applicationId;
+    if (!appId) return;
+    setHasResume(null);
+    supabase
+      .from("generated_resumes")
+      .select("id")
+      .eq("application_id", appId)
+      .limit(1)
+      .then(({ data }: { data: Array<{ id: string }> | null }) => {
+        if (data && data.length > 0) {
+          setHasResume(true);
+          setResumeId(data[0].id);
+        } else {
+          setHasResume(false);
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parseResult?.applicationId]);
 
   async function handleParse(url?: string) {
     const target = url ?? urlInput.trim();
@@ -167,6 +204,40 @@ export default function ApplyPage() {
     }
   }
 
+  async function handleParseById(applicationId: string) {
+    if (!user) return;
+    setStep("loading");
+    setErrorMsg("");
+    try {
+      // Load existing application row from DB
+      const { data: app } = await supabase
+        .from("applications")
+        .select("source_url, source_type, form_answers, company_name, job_title, jd_text")
+        .eq("id", applicationId)
+        .single();
+
+      if (!app?.source_url) throw new Error("Application not found or missing source URL");
+
+      // Re-fetch form fields from ATS to rebuild the review UI
+      const res = await fetch("/api/apply/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: app.source_url, user_id: user.id, existingApplicationId: applicationId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reload job");
+
+      // Use stored form_answers if no new prefilled answers
+      const savedAnswers = (app.form_answers as Record<string, string>) || {};
+      setParseResult({ ...data, applicationId });
+      setAnswers({ ...data.prefilled, ...savedAnswers });
+      setStep("review");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to load application");
+      setStep("error");
+    }
+  }
+
   async function handleSubmit() {
     if (!parseResult || !user) return;
     setStep("submitting");
@@ -180,6 +251,7 @@ export default function ApplyPage() {
           applicationId: parseResult.applicationId,
           confirmed: true,
           form_answers: answers,
+          resume_id: resumeId || undefined,
         }),
       });
       const data = await res.json();
@@ -198,6 +270,8 @@ export default function ApplyPage() {
     setParseResult(null);
     setAnswers({});
     setErrorMsg("");
+    setResumeId(null);
+    setHasResume(null);
   }
 
   // Loading state
@@ -363,18 +437,56 @@ export default function ApplyPage() {
               </div>
             ))}
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-              <AlertTriangle className="mb-1 h-3.5 w-3.5 inline mr-1" />
-              Resume upload via API is not supported for all companies. You may need to attach your resume manually on the company&apos;s portal.
-            </div>
           </CardContent>
         </Card>
 
+        {/* Resume section */}
+        <div className="mt-4">
+          {hasResume === null && (
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-sm text-[var(--text-muted)]">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking for resume…
+            </div>
+          )}
+          {hasResume === true && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Resume ready — will be attached to your application.
+            </div>
+          )}
+          {hasResume === false && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-2 text-sm text-amber-800">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-medium">No resume generated for this job</p>
+                  <p className="mt-0.5 text-xs text-amber-700">Generate a tailored resume before submitting for best results.</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-2 border-amber-300 text-amber-800 hover:bg-amber-100"
+                onClick={() => {
+                  const jd = encodeURIComponent(parseResult.job.descriptionPlain || "")
+                  const company = encodeURIComponent(parseResult.job.company || "")
+                  const title = encodeURIComponent(parseResult.job.title || "")
+                  router.push(`/generate?jd=${jd}&company=${company}&title=${title}&returnApplicationId=${parseResult.applicationId}`)
+                }}
+              >
+                <Sparkles size={14} />
+                Generate Resume First
+              </Button>
+            </div>
+          )}
+        </div>
+
         {/* Confirm button */}
-        <div className="mt-6 flex gap-3">
+        <div className="mt-4 flex gap-3">
           <Button
             onClick={handleSubmit}
-            className="flex-1 gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+            disabled={hasResume === null || hasResume === false}
+            className="flex-1 gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
             size="lg"
           >
             <Send size={16} />

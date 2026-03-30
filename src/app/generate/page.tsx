@@ -53,6 +53,7 @@ export default function GeneratePage() {
   const [generating, setGenerating] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [resume, setResume] = useState<ResumeResult | null>(null);
+  const [returnApplicationId, setReturnApplicationId] = useState<string | null>(null);
 
   // LinkedIn import state
   const [showLinkedInInput, setShowLinkedInInput] = useState(false);
@@ -62,11 +63,13 @@ export default function GeneratePage() {
   const [importError, setImportError] = useState<string | null>(null);
   const linkedInInputRef = useRef<HTMLInputElement>(null);
 
-  // Pre-fill from query params (from Jobs page)
+  // Pre-fill from query params (from Jobs page or Apply page)
   useEffect(() => {
     const jd = searchParams.get("jd");
     const company = searchParams.get("company");
     const title = searchParams.get("title");
+    const retAppId = searchParams.get("returnApplicationId");
+    if (retAppId) setReturnApplicationId(retAppId);
     if (jd) {
       setJdText(jd);
       // Auto-analyze if we have all the data from the Jobs page
@@ -231,6 +234,11 @@ export default function GeneratePage() {
         analysis={analysis}
         onRegenerate={handleGenerate}
         onNewAnalysis={handleReset}
+        onReturnToApplication={
+          returnApplicationId
+            ? () => router.push(`/apply?applicationId=${returnApplicationId}&resume_id=${resume.resume_id}`)
+            : undefined
+        }
       />
     );
   }

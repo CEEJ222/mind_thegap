@@ -7,10 +7,11 @@ import { submitAshbyApplication, type AshbyPayload } from '@/lib/ashby'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { applicationId, confirmed, form_answers } = body as {
+    const { applicationId, confirmed, form_answers, resume_id } = body as {
       applicationId: string
       confirmed: boolean
       form_answers: Record<string, unknown>
+      resume_id?: string
     }
 
     if (!applicationId || !confirmed) {
@@ -51,14 +52,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing ATS metadata on application' }, { status: 400 })
     }
 
+    // Download resume file from Supabase Storage if resume_id provided
+    let resumeBlob: Blob | undefined
+    if (resume_id) {
+      const { data: resumeRow } = await supabase
+        .from('generated_resumes')
+        .select('file_path')
+        .eq('id', resume_id)
+        .single()
+
+      if (resumeRow?.file_path) {
+        const { data: fileData } = await supabase.storage
+          .from('resumes')
+          .download(resumeRow.file_path)
+        if (fileData) resumeBlob = fileData
+      }
+    }
+
     let result: { ok: boolean; applicationId?: string; resumeWarning?: boolean; error?: string }
 
     if (atsType === 'lever') {
-      result = await submitLeverApplication(boardToken, jobId, form_answers as unknown as LeverPayload)
+      const payload = form_answers as unknown as LeverPayload
+      if (resumeBlob) payload.resumeFile = resumeBlob
+      result = await submitLeverApplication(boardToken, jobId, payload)
     } else if (atsType === 'greenhouse') {
-      result = await submitGreenhouseApplication(boardToken, jobId, form_answers as unknown as GreenhousePayload)
+      const payload = form_answers as unknown as GreenhousePayload
+      if (resumeBlob) payload.resumeFile = resumeBlob
+      result = await submitGreenhouseApplication(boardToken, jobId, payload)
     } else if (atsType === 'ashby') {
-      result = await submitAshbyApplication(jobId, form_answers as unknown as AshbyPayload)
+      const payload = form_answers as unknown as AshbyPayload
+      if (resumeBlob) payload.resumeFile = resumeBlob
+      result = await submitAshbyApplication(jobId, payload)
     } else {
       return NextResponse.json({ error: `Unsupported ATS type: ${atsType}` }, { status: 400 })
     }

@@ -8,13 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
-import { Briefcase, Trash2 } from "lucide-react";
+import { Briefcase, Send, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
 
+const ATS_TYPES = new Set(['lever', 'greenhouse', 'ashby'])
+
 export default function ApplicationsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const supabase = createClient();
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -134,7 +138,16 @@ export default function ApplicationsPage() {
                     <option value="no">Rejected</option>
                   </Select>
                 </div>
-                <div className="col-span-2 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="col-span-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  {ATS_TYPES.has(app.source_type || '') && (
+                    <button
+                      onClick={() => router.push(`/apply?applicationId=${app.id}`)}
+                      title="Apply"
+                      className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+                    >
+                      <Send size={14} />
+                    </button>
+                  )}
                   {deletingId === app.id ? (
                     <>
                       <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Confirm</Button>
@@ -178,6 +191,15 @@ export default function ApplicationsPage() {
                     <option value="yes">Interview</option>
                     <option value="no">Rejected</option>
                   </Select>
+                  {ATS_TYPES.has(app.source_type || '') && (
+                    <button
+                      onClick={() => router.push(`/apply?applicationId=${app.id}`)}
+                      title="Apply"
+                      className="flex-shrink-0 rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+                    >
+                      <Send size={14} />
+                    </button>
+                  )}
                   {deletingId === app.id ? (
                     <div className="flex gap-1 flex-shrink-0">
                       <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-8 px-2 text-xs">Delete</Button>

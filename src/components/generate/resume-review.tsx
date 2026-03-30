@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { Download, RefreshCw, Plus } from "lucide-react";
+import { Download, RefreshCw, Plus, Send } from "lucide-react";
 
 interface ResumeResult {
   resume_id: string;
@@ -28,6 +28,7 @@ interface Props {
   analysis: AnalysisResult;
   onRegenerate: () => void;
   onNewAnalysis: () => void;
+  onReturnToApplication?: () => void;
 }
 
 export function ResumeReview({
@@ -35,6 +36,7 @@ export function ResumeReview({
   analysis,
   onRegenerate,
   onNewAnalysis,
+  onReturnToApplication,
 }: Props) {
   const notes = resume.editorial_notes;
   const [downloading, setDownloading] = useState(false);
@@ -133,7 +135,13 @@ export function ResumeReview({
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleDownload} size="lg" disabled={downloading}>
+        {onReturnToApplication && (
+          <Button onClick={onReturnToApplication} size="lg" className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]">
+            <Send className="h-4 w-4" />
+            Return to Application
+          </Button>
+        )}
+        <Button onClick={handleDownload} size="lg" disabled={downloading} variant={onReturnToApplication ? "outline" : "default"}>
           {downloading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
