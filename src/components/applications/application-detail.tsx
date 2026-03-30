@@ -127,7 +127,8 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
             }
             className="w-32"
           >
-            <option value="pending">Pending</option>
+            <option value="pending">Created</option>
+            <option value="applied">Applied</option>
             <option value="yes">Interview</option>
             <option value="no">Rejected</option>
           </Select>

@@ -77,19 +77,50 @@ Return ONLY valid JSON, no markdown fences.`,
 
     const analysis = JSON.parse(text);
 
-    const { data: application, error: appError } = await supabase
+    // Deduplicate: reuse existing application row for same user + company + job title
+    const { data: existing } = await supabase
       .from("applications")
-      .insert({
-        user_id,
-        company_name: analysis.company_name,
-        job_title: analysis.job_title,
-        jd_text,
-        fit_score: Math.round(analysis.fit_score),
-      })
-      .select()
+      .select("id")
+      .eq("user_id", user_id)
+      .ilike("company_name", analysis.company_name)
+      .ilike("job_title", analysis.job_title)
+      .limit(1)
       .single();
 
-    if (appError) throw appError;
+    let application: { id: string };
+
+    if (existing) {
+      // Update fit score + JD text on existing row
+      const { data: updated, error: updateErr } = await supabase
+        .from("applications")
+        .update({
+          fit_score: Math.round(analysis.fit_score),
+          jd_text,
+          company_name: analysis.company_name,
+          job_title: analysis.job_title,
+        })
+        .eq("id", existing.id)
+        .select("id")
+        .single();
+      if (updateErr || !updated) throw updateErr ?? new Error("Update failed");
+      application = updated;
+      // Delete old themes so we replace them with fresh analysis
+      await supabase.from("application_themes").delete().eq("application_id", existing.id);
+    } else {
+      const { data: inserted, error: appError } = await supabase
+        .from("applications")
+        .insert({
+          user_id,
+          company_name: analysis.company_name,
+          job_title: analysis.job_title,
+          jd_text,
+          fit_score: Math.round(analysis.fit_score),
+        })
+        .select("id")
+        .single();
+      if (appError || !inserted) throw appError ?? new Error("Insert failed");
+      application = inserted;
+    }
 
     const themesToInsert = analysis.themes.map(
       (t: {
