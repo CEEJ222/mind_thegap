@@ -163,6 +163,11 @@ export default function ApplyPage() {
   useEffect(() => {
     const appId = parseResult?.applicationId;
     if (!appId) return;
+    // If we already have a resumeId (from URL param or prior check), trust it
+    if (resumeId) {
+      setHasResume(true);
+      return;
+    }
     setHasResume(null);
     supabase
       .from("generated_resumes")
@@ -178,7 +183,7 @@ export default function ApplyPage() {
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parseResult?.applicationId]);
+  }, [parseResult?.applicationId, resumeId]);
 
   async function handleParse(url?: string) {
     const target = url ?? urlInput.trim();
