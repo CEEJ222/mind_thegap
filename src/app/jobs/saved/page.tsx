@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { showSnackbar } from "@/components/ui/snackbar";
 import {
   BookmarkCheck,
-  ExternalLink,
   Sparkles,
   MapPin,
   Building2,
@@ -24,7 +23,9 @@ import {
   Loader2,
   CheckCircle2,
   Zap,
+  Send,
 } from "lucide-react";
+import { detectATS } from "@/lib/ats-detect";
 import { useRouter } from "next/navigation";
 import type { JobStatus } from "@/lib/types/database";
 
@@ -289,6 +290,16 @@ export default function SavedJobsPage() {
     if (job.company_name) params.set("company", job.company_name);
     if (job.title) params.set("title", job.title);
     router.push(`/generate?${params.toString()}`);
+  }
+
+  function handleApply(job: Job) {
+    if (!job.apply_url) return;
+    const detected = detectATS(job.apply_url);
+    if (detected) {
+      router.push(`/apply?url=${encodeURIComponent(job.apply_url)}`);
+    } else {
+      window.open(job.apply_url, "_blank");
+    }
   }
 
   function formatPostedDate(posted: string | null): string {
@@ -633,6 +644,18 @@ export default function SavedJobsPage() {
                         <Sparkles size={14} />
                         Analyze
                       </Button>
+                      {job.apply_url && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleApply(job)}
+                          disabled={isProcessing || batchRunning}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Send size={14} />
+                          Apply
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -643,29 +666,16 @@ export default function SavedJobsPage() {
                         <BookmarkCheck size={14} />
                         Unsave
                       </Button>
-                      <div className="flex gap-1">
-                        {job.apply_url && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={() => window.open(job.apply_url!, "_blank")}
-                            title="View on LinkedIn"
-                          >
-                            <ExternalLink size={14} />
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-[var(--text-faint)] hover:text-red-500"
-                          onClick={() => dismissJob(job.id)}
-                          disabled={isProcessing || batchRunning}
-                          title="Dismiss"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-[var(--text-faint)] hover:text-red-500"
+                        onClick={() => dismissJob(job.id)}
+                        disabled={isProcessing || batchRunning}
+                        title="Dismiss"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
                     </div>
                   </div>
 
@@ -680,6 +690,18 @@ export default function SavedJobsPage() {
                       <Sparkles size={14} />
                       Analyze
                     </Button>
+                    {job.apply_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleApply(job)}
+                        disabled={isProcessing || batchRunning}
+                        className="gap-1.5 text-xs"
+                      >
+                        <Send size={14} />
+                        Apply
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -689,16 +711,6 @@ export default function SavedJobsPage() {
                     >
                       <BookmarkCheck size={14} />
                     </Button>
-                    {job.apply_url && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 w-8 p-0"
-                        onClick={() => window.open(job.apply_url!, "_blank")}
-                      >
-                        <ExternalLink size={14} />
-                      </Button>
-                    )}
                     <Button
                       size="sm"
                       variant="outline"
