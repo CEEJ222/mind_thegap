@@ -206,6 +206,16 @@ export interface Database {
           jd_text: string;
           fit_score: number | null;
           interview_converted: InterviewStatus;
+          source_url: string | null;
+          source_type: string | null;
+          jd_summary: string | null;
+          ats_job_id: string | null;
+          ats_board_token: string | null;
+          form_answers: Record<string, unknown> | null;
+          ats_status: string | null;
+          ats_submitted_at: string | null;
+          ats_submission_response: Record<string, unknown> | null;
+          ats_error_message: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -216,6 +226,16 @@ export interface Database {
           job_title?: string | null;
           fit_score?: number | null;
           interview_converted?: InterviewStatus;
+          source_url?: string | null;
+          source_type?: string | null;
+          jd_summary?: string | null;
+          ats_job_id?: string | null;
+          ats_board_token?: string | null;
+          form_answers?: Record<string, unknown> | null;
+          ats_status?: string | null;
+          ats_submitted_at?: string | null;
+          ats_submission_response?: Record<string, unknown> | null;
+          ats_error_message?: string | null;
         };
         Update: {
           company_name?: string | null;
@@ -223,6 +243,16 @@ export interface Database {
           jd_text?: string;
           fit_score?: number | null;
           interview_converted?: InterviewStatus;
+          source_url?: string | null;
+          source_type?: string | null;
+          jd_summary?: string | null;
+          ats_job_id?: string | null;
+          ats_board_token?: string | null;
+          form_answers?: Record<string, unknown> | null;
+          ats_status?: string | null;
+          ats_submitted_at?: string | null;
+          ats_submission_response?: Record<string, unknown> | null;
+          ats_error_message?: string | null;
         };
       };
       application_themes: {
