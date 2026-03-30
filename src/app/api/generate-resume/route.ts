@@ -94,13 +94,14 @@ export async function POST(request: NextRequest) {
     const lengthSetting = (settings?.resume_length as string) ?? "1_page";
     const includeSummary = settings?.include_summary ?? true;
     const fullName = (settings?.full_name as string) || "";
+    const websiteUrl = (settings?.website_url as string) || "";
     const linkedinUrl = (settings?.linkedin_url as string) || "";
     const contactEmail = (settings?.email as string) || "";
     const phone = (settings?.phone as string) || "";
     const location = (settings?.location as string) || "";
 
-    // Build contact header line
-    const contactParts = [fullName, linkedinUrl, contactEmail, phone, location].filter(Boolean);
+    // Build contact header line — website first, then linkedin
+    const contactParts = [fullName, websiteUrl, linkedinUrl, contactEmail, phone, location].filter(Boolean);
     const contactHeader = contactParts.join(" | ");
 
     const text = await chatCompletion({
