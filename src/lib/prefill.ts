@@ -1,5 +1,4 @@
 import type { LeverPayload } from './lever'
-import type { GreenhousePayload } from './greenhouse'
 import type { AshbyPayload } from './ashby'
 
 export interface UserContactInfo {
