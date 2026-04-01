@@ -363,6 +363,9 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
         })}
       </div>
 
+      {/* Spacer so sticky FAB doesn't cover content */}
+      <div className="h-20 md:h-16" />
+
       {/* Generate Resume FAB */}
       <div className="sticky bottom-0 -mx-4 mt-6 border-t border-[var(--border-subtle)] bg-[var(--bg-base)]/95 px-4 py-3 backdrop-blur-sm md:-mx-9 md:border-t-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none md:absolute md:bottom-6 md:right-9 md:left-auto md:mt-0 flex flex-col items-center gap-1 md:items-end">
         <span className="text-[11px] text-[var(--text-muted)]">

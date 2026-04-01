@@ -151,43 +151,46 @@ Return ONLY valid JSON, no markdown fences.`,
       ],
     });
 
-    // Strip markdown fences if the model wrapped the JSON anyway
-    let cleaned = text.trim()
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim()
+    // Strip markdown fences if the model wrapped JSON.
+    let cleaned = text.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     }
 
-    let result: { resume_content: string; editorial_notes: Record<string, unknown> }
+    // Remove/escape control characters that can break JSON.parse.
+    cleaned = cleaned.replace(/[\x00-\x1f]/g, (ch) =>
+      ch === "\n" || ch === "\r" || ch === "\t" ? ch : " "
+    );
 
-    // Attempt 1: parse as-is (handles cases where the model output valid JSON with \n escape seqs)
+    let result: { resume_content: string; editorial_notes: Record<string, unknown> };
     try {
-      result = JSON.parse(cleaned)
+      // Attempt 1: parse as-is.
+      result = JSON.parse(cleaned);
     } catch {
-      // Attempt 2: escape literal (unescaped) newlines inside resume_content, then retry
+      // Attempt 2: escape literal newlines/tabs inside resume_content.
       const fixed = cleaned.replace(
         /"resume_content"\s*:\s*"([\s\S]*?)"\s*,\s*"editorial_notes"/,
         (_, content) => {
           const escaped = content
-            .replace(/\r\n/g, '\\n')
-            .replace(/\r/g, '\\n')
-            .replace(/\n/g, '\\n')
-            .replace(/\t/g, '\\t')
-          return `"resume_content": "${escaped}","editorial_notes"`
+            .replace(/\r\n/g, "\\n")
+            .replace(/\r/g, "\\n")
+            .replace(/\n/g, "\\n")
+            .replace(/\t/g, "\\t");
+          return `"resume_content": "${escaped}","editorial_notes"`;
         }
-      )
+      );
       try {
-        result = JSON.parse(fixed)
+        result = JSON.parse(fixed);
       } catch {
-        // Attempt 3: extract resume_content with a regex and build a minimal object
-        const contentMatch = cleaned.match(/"resume_content"\s*:\s*"([\s\S]*?)(?<!\\)"/)
-        if (contentMatch) {
-          result = {
-            resume_content: contentMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t'),
-            editorial_notes: {}
-          }
-        } else {
-          throw new Error(`Failed to parse resume JSON: ${cleaned.slice(0, 300)}`)
+        // Attempt 3: best-effort extraction of resume_content.
+        const contentMatch = cleaned.match(/"resume_content"\s*:\s*"([\s\S]*?)(?<!\\)"/);
+        if (!contentMatch) {
+          throw new Error(`Failed to parse resume JSON: ${cleaned.slice(0, 300)}`);
         }
+        result = {
+          resume_content: contentMatch[1].replace(/\\n/g, "\n").replace(/\\t/g, "\t"),
+          editorial_notes: {},
+        };
       }
     }
 
