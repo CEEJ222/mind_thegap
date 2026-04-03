@@ -15,11 +15,18 @@ interface OpenRouterMessage {
   content: string;
 }
 
+/** OpenRouter may route Anthropic models through Amazon Bedrock; Bedrock has rejected some model IDs. Prefer other providers. */
+const DEFAULT_PROVIDER_PREFERENCES = {
+  ignore: ["amazon-bedrock"],
+} as const;
+
 interface OpenRouterOptions {
   model: string;
   messages: OpenRouterMessage[];
   max_tokens?: number;
   temperature?: number;
+  /** Merged with defaults (e.g. ignore Bedrock). */
+  provider?: Record<string, unknown>;
 }
 
 /**
@@ -52,6 +59,10 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
       messages: options.messages,
       max_tokens: options.max_tokens ?? 4096,
       temperature: options.temperature ?? 0.3,
+      provider: {
+        ...DEFAULT_PROVIDER_PREFERENCES,
+        ...options.provider,
+      },
     }),
   });
 
