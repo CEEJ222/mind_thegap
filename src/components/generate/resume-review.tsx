@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
-import { Download, RefreshCw, Plus, Send, Eye } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, RefreshCw, Plus, Send, Eye, Undo2, Loader2 } from "lucide-react";
 import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
+
+interface EditorialNotes {
+  shortened?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
+  omitted?: { role: string; reason: string; userOverride?: "keep" | "remove" | null }[];
+  prioritized?: string[];
+}
 
 interface ResumeResult {
   resume_id: string;
   file_path: string;
-  editorial_notes: {
-    shortened?: { role: string; reason: string }[];
-    omitted?: { role: string; reason: string }[];
-    prioritized?: string[];
-  };
+  editorial_notes: EditorialNotes;
 }
 
 interface AnalysisResult {
@@ -30,6 +32,7 @@ interface Props {
   onRegenerate: () => void;
   onNewAnalysis: () => void;
   onReturnToApplication?: () => void;
+  onResumeUpdate?: (resume: ResumeResult) => void;
 }
 
 export function ResumeReview({
@@ -38,10 +41,14 @@ export function ResumeReview({
   onRegenerate,
   onNewAnalysis,
   onReturnToApplication,
+  onResumeUpdate,
 }: Props) {
   const notes = resume.editorial_notes;
   const [downloading, setDownloading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [activeOverride, setActiveOverride] = useState<string | null>(null);
+  const [overrideNote, setOverrideNote] = useState("");
 
   async function handleDownload() {
     if (!resume.file_path) return;
@@ -76,6 +83,94 @@ export function ResumeReview({
     } finally {
       setDownloading(false);
     }
+  }
+
+  async function handleOverride(itemLabel: string) {
+    setOverriding(true);
+    setActiveOverride(null);
+
+    try {
+      const res = await fetch("/api/regenerate-section", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application_id: analysis.application_id,
+          resume_id: resume.resume_id,
+          override_item: itemLabel,
+          override_instruction: `User explicitly requires this item be included. Reason: ${overrideNote || "none provided"}. Include it with its strongest 2-3 bullets prioritizing the most relevant details for the target role.`,
+          user_note: overrideNote || "",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Override regeneration failed");
+
+      const data = await res.json();
+      // Update the resume with the new data
+      if (onResumeUpdate) {
+        onResumeUpdate(data);
+      }
+    } catch (err) {
+      console.error("Override failed:", err);
+    } finally {
+      setOverriding(false);
+      setOverrideNote("");
+    }
+  }
+
+  function renderOverridableItem(
+    item: { role: string; reason: string; userOverride?: "keep" | "remove" | null },
+    index: number,
+  ) {
+    const itemKey = `${item.role}-${index}`;
+    const isOverridden = item.userOverride === "keep";
+    const isActive = activeOverride === itemKey;
+
+    return (
+      <li key={index} className="space-y-2">
+        <div className="flex items-start gap-2">
+          <span className="flex-1">
+            • <strong>{item.role}</strong>: {item.reason}
+            {isOverridden && (
+              <span className="ml-2 text-xs font-medium text-[var(--accent)]">
+                ✓ Included per your override
+              </span>
+            )}
+          </span>
+          {!isOverridden && !overriding && (
+            <Button
+              variant="dispute"
+              size="sm"
+              onClick={() => {
+                setActiveOverride(isActive ? null : itemKey);
+                setOverrideNote("");
+              }}
+            >
+              Keep it <Undo2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+        {isActive && (
+          <div className="ml-4 flex items-center gap-2">
+            <Input
+              placeholder="Tell us why (optional)"
+              value={overrideNote}
+              onChange={(e) => setOverrideNote(e.target.value)}
+              className="h-8 flex-1 text-xs border-[var(--border-input)] bg-[var(--bg-card)]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleOverride(item.role);
+              }}
+            />
+            <Button
+              variant="save-rescore"
+              size="sm"
+              onClick={() => handleOverride(item.role)}
+            >
+              Save
+            </Button>
+          </div>
+        )}
+      </li>
+    );
   }
 
   return (
@@ -117,12 +212,10 @@ export function ResumeReview({
               <h4 className="mb-2 text-sm font-semibold text-warning">
                 Shortened
               </h4>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {notes.shortened.map((item, i) => (
-                  <li key={i}>
-                    • <strong>{item.role}</strong>: {item.reason}
-                  </li>
-                ))}
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {notes.shortened.map((item, i) =>
+                  renderOverridableItem(item, i)
+                )}
               </ul>
             </div>
           )}
@@ -130,12 +223,10 @@ export function ResumeReview({
           {notes.omitted && notes.omitted.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-error">Omitted</h4>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {notes.omitted.map((item, i) => (
-                  <li key={i}>
-                    • <strong>{item.role}</strong>: {item.reason}
-                  </li>
-                ))}
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {notes.omitted.map((item, i) =>
+                  renderOverridableItem(item, i)
+                )}
               </ul>
             </div>
           )}
@@ -143,29 +234,41 @@ export function ResumeReview({
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => setPreviewing(true)} className="gap-2">
+        <Button variant="outline" onClick={() => setPreviewing(true)} className="gap-2" disabled={overriding}>
           <Eye className="h-4 w-4" />
           Preview
         </Button>
         {onReturnToApplication && (
-          <Button onClick={onReturnToApplication} size="lg" className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]">
+          <Button
+            onClick={onReturnToApplication}
+            size="lg"
+            disabled={overriding}
+            className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+          >
             <Send className="h-4 w-4" />
             Return to Application
           </Button>
         )}
-        <Button onClick={handleDownload} size="lg" disabled={downloading} variant={onReturnToApplication ? "outline" : "default"}>
+        <Button
+          onClick={handleDownload}
+          size="lg"
+          disabled={downloading || overriding}
+          variant={onReturnToApplication ? "outline" : "default"}
+        >
           {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : overriding ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          {downloading ? "Exporting..." : "Download Resume (.docx)"}
+          {downloading ? "Exporting..." : overriding ? "Regenerating..." : "Download Resume (.docx)"}
         </Button>
-        <Button variant="outline" onClick={onRegenerate}>
+        <Button variant="outline" onClick={onRegenerate} disabled={overriding}>
           <RefreshCw className="mr-2 h-4 w-4" />
           Regenerate
         </Button>
-        <Button variant="ghost" onClick={onNewAnalysis}>
+        <Button variant="ghost" onClick={onNewAnalysis} disabled={overriding}>
           <Plus className="mr-2 h-4 w-4" />
           New Analysis
         </Button>
