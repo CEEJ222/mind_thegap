@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { cn, getScoreTierIcon, getFitScoreColor } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Download, Sparkles } from "lucide-react";
+import { ArrowLeft, Download, Eye, Sparkles } from "lucide-react";
+import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -29,6 +30,7 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
   const [jdExpanded, setJdExpanded] = useState(false);
   const [jdSummary, setJdSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [previewResumeId, setPreviewResumeId] = useState<string | null>(null);
 
   const loadDetails = useCallback(async () => {
     const [themesRes, resumesRes] = await Promise.all([
@@ -260,15 +262,24 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
                       {new Date(resume.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {resume.file_path && (
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleDownload(resume.file_path!)}
+                      onClick={() => setPreviewResumeId(resume.id)}
                     >
-                      <Download className="mr-1 h-3 w-3" /> Download
+                      <Eye className="mr-1 h-3 w-3" /> Preview
                     </Button>
-                  )}
+                    {resume.file_path && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(resume.file_path!)}
+                      >
+                        <Download className="mr-1 h-3 w-3" /> Download
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
               <Button
@@ -286,6 +297,13 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {previewResumeId && (
+        <ResumePreviewModal
+          resumeId={previewResumeId}
+          onClose={() => setPreviewResumeId(null)}
+        />
+      )}
     </div>
   );
 }

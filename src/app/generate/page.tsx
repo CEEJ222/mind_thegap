@@ -9,7 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { GapAnalysis } from "@/components/generate/gap-analysis";
 import { ResumeReview } from "@/components/generate/resume-review";
-import { Sparkles, Loader2, Link2, CheckCircle2, X } from "lucide-react";
+import { JdQueue } from "@/components/generate/jd-queue";
+import type { QueueItem, QueueItemStatus } from "@/components/generate/jd-queue";
+import { showSnackbar } from "@/components/ui/snackbar";
+import { Sparkles, Loader2, Link2, CheckCircle2, X, Plus } from "lucide-react";
 import type { ScoreTier } from "@/lib/types/database";
 
 interface ThemeResult {
@@ -62,6 +65,11 @@ export default function GeneratePage() {
   const [importSuccess, setImportSuccess] = useState<{ title: string; company: string } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const linkedInInputRef = useRef<HTMLInputElement>(null);
+
+  // Batch queue state
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
 
   // Pre-fill from query params (from Jobs page or Apply page)
   useEffect(() => {
@@ -227,6 +235,102 @@ export default function GeneratePage() {
     setLinkedInUrl("");
   }
 
+  function handleAddToQueue() {
+    if (!jdText.trim()) return;
+    const firstLine = jdText.trim().split("\n").find((l) => l.trim()) || "Job Description";
+    const label = firstLine.trim().slice(0, 80);
+    setQueue((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        jdText: jdText.trim(),
+        label,
+        status: "pending",
+      },
+    ]);
+    setJdText("");
+    setImportSuccess(null);
+  }
+
+  function handleRemoveFromQueue(id: string) {
+    setQueue((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function setQueueItemStatus(id: string, status: QueueItemStatus, error?: string) {
+    setQueue((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status, error } : item))
+    );
+  }
+
+  async function processOneJd(item: QueueItem): Promise<boolean> {
+    if (!user) return false;
+    try {
+      setQueueItemStatus(item.id, "analyzing");
+
+      const analyzeRes = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jd_text: item.jdText, user_id: user.id }),
+      });
+      const analyzeData = await analyzeRes.json();
+      if (!analyzeRes.ok) throw new Error(analyzeData.error);
+
+      setQueueItemStatus(item.id, "generating");
+
+      const genRes = await fetch("/api/generate-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application_id: analyzeData.application_id,
+          user_id: user.id,
+        }),
+      });
+      const genData = await genRes.json();
+      if (!genRes.ok) throw new Error(genData.error);
+
+      setQueueItemStatus(item.id, "done");
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error(`Batch processing failed for "${item.label}":`, err);
+      setQueueItemStatus(item.id, "error", msg);
+      return false;
+    }
+  }
+
+  async function handleBatchProcess() {
+    if (!user || batchRunning) return;
+
+    const retryable = queue.filter((item) => item.status === "pending" || item.status === "error");
+    if (!retryable.length) return;
+
+    // Reset error items back to pending before reprocessing
+    for (const item of retryable) {
+      if (item.status === "error") setQueueItemStatus(item.id, "pending");
+    }
+
+    setBatchRunning(true);
+    setBatchProgress(0);
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const item of retryable) {
+      const ok = await processOneJd(item);
+      if (ok) succeeded++;
+      else failed++;
+      setBatchProgress((prev) => prev + 1);
+    }
+
+    setBatchRunning(false);
+    if (failed === 0) {
+      showSnackbar(`${succeeded} resume${succeeded !== 1 ? "s" : ""} generated — check Applications`);
+      setTimeout(() => router.push("/applications"), 1500);
+    } else {
+      showSnackbar(`${succeeded} generated, ${failed} failed`, "error");
+    }
+  }
+
   if (step === "review" && resume && analysis) {
     return (
       <ResumeReview
@@ -346,22 +450,71 @@ export default function GeneratePage() {
           </div>
         )}
 
-        <Button
-          data-analyze-btn
-          onClick={handleAnalyze}
-          disabled={!jdText.trim() || analyzing}
-          className="w-full"
-          size="lg"
-        >
-          {analyzing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Analyzing...
-            </>
-          ) : (
-            "Analyze"
-          )}
-        </Button>
+        {queue.length === 0 ? (
+          <div className="flex gap-2">
+            <Button
+              data-analyze-btn
+              onClick={handleAnalyze}
+              disabled={!jdText.trim() || analyzing}
+              className="flex-1"
+              size="lg"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                "Analyze"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleAddToQueue}
+              disabled={!jdText.trim() || analyzing}
+              size="lg"
+              title="Add to queue for batch processing"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Queue
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleAddToQueue}
+              disabled={!jdText.trim() || batchRunning}
+              className="flex-1"
+              size="lg"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add to Queue
+            </Button>
+            <Button
+              onClick={handleBatchProcess}
+              disabled={batchRunning || queue.filter((i) => i.status === "pending" || i.status === "error").length === 0}
+              className="flex-1"
+              size="lg"
+            >
+              {batchRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Process All (${queue.filter((i) => i.status === "pending" || i.status === "error").length})`
+              )}
+            </Button>
+          </div>
+        )}
+
+        <JdQueue
+          items={queue}
+          batchRunning={batchRunning}
+          batchProgress={batchProgress}
+          onRemove={handleRemoveFromQueue}
+        />
       </div>
     </div>
   );
