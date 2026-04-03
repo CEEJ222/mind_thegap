@@ -18,6 +18,9 @@
 
 # misc
 .DS_Store
+
+# Claude Code local worktrees (can include large .next caches)
+.claude/
 *.pem
 
 # debug

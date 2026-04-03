@@ -15,17 +15,28 @@ interface OpenRouterMessage {
   content: string;
 }
 
-/** OpenRouter may route Anthropic models through Amazon Bedrock; Bedrock has rejected some model IDs. Prefer other providers. */
-const DEFAULT_PROVIDER_PREFERENCES = {
-  ignore: ["amazon-bedrock"],
-} as const;
+/**
+ * Optional OpenRouter routing. If unset, we do **not** send a `provider` field so account-wide
+ * privacy / ignored providers on openrouter.ai/settings/privacy are not stacked with app defaults
+ * (which caused "All providers have been ignored" / 404).
+ *
+ * To prefer Anthropic’s API (e.g. avoid Bedrock), set in env:
+ * `OPENROUTER_PROVIDER_ORDER=anthropic`
+ * (comma-separated list; only after Anthropic is allowed in Privacy settings.)
+ */
+function getOptionalProviderFromEnv(): Record<string, unknown> | undefined {
+  const raw = process.env.OPENROUTER_PROVIDER_ORDER?.trim();
+  if (!raw) return undefined;
+  const order = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return order.length ? { order } : undefined;
+}
 
 interface OpenRouterOptions {
   model: string;
   messages: OpenRouterMessage[];
   max_tokens?: number;
   temperature?: number;
-  /** Merged with defaults (e.g. ignore Bedrock). */
+  /** Extra OpenRouter `provider` fields; merged with env-based preferences. */
   provider?: Record<string, unknown>;
 }
 
@@ -46,6 +57,12 @@ function extractJSON(text: string): string {
 }
 
 export async function chatCompletion(options: OpenRouterOptions): Promise<string> {
+  const mergedProvider = {
+    ...(getOptionalProviderFromEnv() ?? {}),
+    ...(options.provider ?? {}),
+  };
+  const hasProvider = Object.keys(mergedProvider).length > 0;
+
   const res = await fetch(OPENROUTER_API_URL, {
     method: "POST",
     headers: {
@@ -59,10 +76,7 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
       messages: options.messages,
       max_tokens: options.max_tokens ?? 4096,
       temperature: options.temperature ?? 0.3,
-      provider: {
-        ...DEFAULT_PROVIDER_PREFERENCES,
-        ...options.provider,
-      },
+      ...(hasProvider ? { provider: mergedProvider } : {}),
     }),
   });
 

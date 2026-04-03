@@ -1,0 +1,8 @@
+# Utility functions and tests
+
+When writing new utility functions:
+
+- Always create a corresponding Jest test file in `__tests__/`.
+- Cover happy path, edge cases, and boundary values.
+- Use the existing `jest.config.cjs` setup in `frontend/`.
+- Export the function with a clean alias if needed for testing.
