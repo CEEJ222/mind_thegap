@@ -1,14 +1,30 @@
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+/**
+ * OpenRouter model IDs change when providers deprecate slugs. If you see
+ * `No endpoints found for anthropic/...`, check https://openrouter.ai/models and
+ * update these, or set OPENROUTER_MODEL_* env vars (see below).
+ */
+function envModel(envKey: string, fallback: string): string {
+  const v = process.env[envKey]?.trim();
+  return v || fallback;
+}
+
 // Model selection by task complexity
 export const MODELS = {
   // Complex reasoning: gap analysis, resume generation
-  REASONING: "anthropic/claude-3.5-sonnet",
+  REASONING: envModel(
+    "OPENROUTER_MODEL_REASONING",
+    "anthropic/claude-3.7-sonnet"
+  ),
   // Structured extraction: document parsing, URL scraping
-  EXTRACTION: "anthropic/claude-3.5-sonnet",
-  // Light tasks: single theme rescore
-  LIGHT: "anthropic/claude-3-haiku",
-} as const;
+  EXTRACTION: envModel(
+    "OPENROUTER_MODEL_EXTRACTION",
+    "anthropic/claude-3.7-sonnet"
+  ),
+  // Light tasks: single theme rescore, summaries
+  LIGHT: envModel("OPENROUTER_MODEL_LIGHT", "anthropic/claude-3.5-haiku"),
+};
 
 interface OpenRouterMessage {
   role: "system" | "user" | "assistant";
@@ -41,6 +57,32 @@ interface OpenRouterOptions {
 }
 
 /**
+ * OpenRouter / some models return `message.content` as a string, or as an array of
+ * content blocks (e.g. `{ type: "text", text: "..." }`). Missing content used to
+ * throw when we called `.trim()` on undefined.
+ */
+export function normalizeAssistantContent(data: {
+  choices?: Array<{ message?: { content?: unknown } }>;
+}): string {
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        if (typeof block === "string") return block;
+        if (block && typeof block === "object" && "text" in block) {
+          return String((block as { text: string }).text);
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (content == null) return "";
+  return String(content);
+}
+
+/**
  * Extract JSON from a response that may contain markdown fences or extra text.
  */
 function extractJSON(text: string): string {
@@ -53,6 +95,7 @@ function extractJSON(text: string): string {
   if (jsonMatch) return jsonMatch[1].trim();
 
   // Return as-is and let JSON.parse handle the error
+  if (typeof text !== "string") return "";
   return text.trim();
 }
 
@@ -85,7 +128,12 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
     throw new Error(`OpenRouter error ${res.status}: ${JSON.stringify(err)}`);
   }
 
-  const data = await res.json();
-  const raw = data.choices[0].message.content;
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const raw = normalizeAssistantContent(data);
+  if (!raw.trim()) {
+    throw new Error("OpenRouter returned empty assistant content");
+  }
   return extractJSON(raw);
 }

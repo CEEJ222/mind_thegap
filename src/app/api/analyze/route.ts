@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  clampScore,
+  normalizeAnalysisPayload,
+  normalizeScoreTier,
+} from "@/lib/analysis-payload";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
 
 export async function POST(request: NextRequest) {
@@ -75,7 +80,18 @@ Return ONLY valid JSON, no markdown fences.`,
       ],
     });
 
-    const analysis = JSON.parse(text);
+    let analysis: ReturnType<typeof normalizeAnalysisPayload>;
+    try {
+      analysis = normalizeAnalysisPayload(JSON.parse(text));
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Could not parse analysis from the model",
+          code: "PARSE_ERROR",
+        },
+        { status: 422 }
+      );
+    }
 
     // Deduplicate: reuse existing application row for same user + company + job title
     const { data: existing } = await supabase
@@ -85,7 +101,7 @@ Return ONLY valid JSON, no markdown fences.`,
       .ilike("company_name", analysis.company_name)
       .ilike("job_title", analysis.job_title)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     let application: { id: string };
 
@@ -153,8 +169,13 @@ Return ONLY valid JSON, no markdown fences.`,
     });
   } catch (err) {
     console.error("Analysis error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Analysis failed" },
+      {
+        error: "Analysis failed",
+        code: "INTERNAL",
+        ...(process.env.NODE_ENV === "development" && { details: message }),
+      },
       { status: 500 }
     );
   }
@@ -230,7 +251,21 @@ Respond with JSON only:
       ],
     });
 
-    const updated = JSON.parse(text);
+    let updated: {
+      score_tier: string;
+      score_numeric: number;
+      explanation: string;
+    };
+    try {
+      updated = JSON.parse(text) as typeof updated;
+    } catch {
+      return NextResponse.json(
+        { error: "Could not parse rescore from the model", code: "PARSE_ERROR" },
+        { status: 422 }
+      );
+    }
+    updated.score_numeric = clampScore(updated.score_numeric);
+    updated.score_tier = normalizeScoreTier(updated.score_tier);
 
     // Enforce tier/score consistency — AI sometimes returns mismatched values
     if (updated.score_tier === "strong" && updated.score_numeric < 70) {
