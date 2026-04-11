@@ -611,7 +611,7 @@ export default function JobsPage() {
                 }}
                 disabled={!builderKeywords.trim() || !newSearchName.trim() || savingSearch}
                 size="sm"
-                className="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                className="bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)]"
               >
                 {savingSearch ? (
                   <>
@@ -717,7 +717,7 @@ export default function JobsPage() {
                 <Filter size={12} />
                 Filters
                 {activeFilterCount > 0 && (
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-black">
                     {activeFilterCount}
                   </span>
                 )}

@@ -242,7 +242,7 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
                 onClick={() =>
                   router.push(`/generate?application_id=${application.id}`)
                 }
-                className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                className="gap-2 bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)]"
               >
                 <Sparkles className="h-4 w-4" />
                 Generate Resume

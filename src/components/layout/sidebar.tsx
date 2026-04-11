@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import {
   Sparkles,
   Briefcase,
@@ -16,6 +17,8 @@ import {
   X,
   Search,
   BookmarkCheck,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 const navItems = [
@@ -106,6 +109,71 @@ export function Sidebar() {
   );
 }
 
+function SidebarTheme({ collapsed }: { collapsed: boolean }) {
+  const { settings, refreshSettings } = useAuth();
+  const supabase = createClient();
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const s = settings as { theme?: string } | null;
+    const t = s?.theme === "dark" ? "dark" : "light";
+    setTheme(t);
+    document.documentElement.classList.toggle("dark", t === "dark");
+  }, [settings]);
+
+  async function setThemeValue(next: "light" | "dark") {
+    const s = settings as { id?: string } | null;
+    if (!s?.id) return;
+    const { error } = await supabase
+      .from("user_settings")
+      .update({ theme: next })
+      .eq("id", s.id);
+    if (error) return;
+    setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    await refreshSettings();
+  }
+
+  return (
+    <div className={cn("py-2", collapsed ? "px-2" : "px-3")}>
+      <div
+        className="flex h-10 w-full items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] p-1"
+        role="group"
+        aria-label="Theme"
+      >
+        <button
+          type="button"
+          aria-pressed={theme === "light"}
+          aria-label="Light mode"
+          onClick={() => void setThemeValue("light")}
+          className={cn(
+            "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+            theme === "light"
+              ? "bg-[var(--bg-card)] text-[var(--accent)] shadow-sm"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          )}
+        >
+          <Sun size={18} strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          aria-pressed={theme === "dark"}
+          aria-label="Dark mode"
+          onClick={() => void setThemeValue("dark")}
+          className={cn(
+            "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+            theme === "dark"
+              ? "bg-[var(--bg-card)] text-[var(--accent)] shadow-sm"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          )}
+        >
+          <Moon size={18} strokeWidth={2} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SidebarContent({
   collapsed,
   setCollapsed,
@@ -125,7 +193,7 @@ function SidebarContent({
         {!collapsed && (
           <Link href="/generate" className="text-lg" onClick={onNavClick}>
             <span className="font-medium text-[var(--text-primary)]">Mind </span>
-            <span className="font-medium text-[var(--accent)]">the </span>
+            <span className="font-medium text-[var(--text-primary)]">the </span>
             <span className="font-black text-[var(--accent)]">App</span>
           </Link>
         )}
@@ -161,6 +229,7 @@ function SidebarContent({
       </nav>
 
       <div className="border-t border-[var(--border-subtle)] p-2 space-y-1">
+        <SidebarTheme collapsed={collapsed} />
         <Link
           href="/settings"
           onClick={onNavClick}

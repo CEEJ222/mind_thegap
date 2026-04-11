@@ -712,7 +712,7 @@ export function ProfileDisplay({ entries, chunks, onUpdate, onMerge, mergeActive
             {onMerge && (
               <button
                 onClick={onMerge}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors shadow-sm ${mergeActive ? "bg-[var(--accent-dark)] text-white" : "bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)]"}`}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors shadow-sm ${mergeActive ? "bg-[var(--accent-dark)] text-black" : "bg-[var(--accent)] text-black hover:bg-[var(--accent-dark)]"}`}
                 title="Merge Entries"
               >
                 <Merge size={14} />

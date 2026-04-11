@@ -131,7 +131,7 @@ export function MergeEntries({ entries, chunks, onComplete, onCancel }: Props) {
                       {entryChunks.length} bullets
                     </span>
                     {isKept && (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs font-bold text-white">
+                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs font-bold text-black">
                         Keep
                       </span>
                     )}

@@ -156,6 +156,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Apply UI theme from persisted user_settings (dropdown only toggled class on change before)
+  useEffect(() => {
+    if (!user) {
+      document.documentElement.classList.remove("dark");
+      return;
+    }
+    if (!settings) return;
+    document.documentElement.classList.toggle("dark", settings.theme === "dark");
+  }, [user, settings]);
+
   return (
     <AuthContext.Provider
       value={{ user, settings, loading, hasProfile, refreshSettings, refreshProfile, signOut }}

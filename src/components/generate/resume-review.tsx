@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Download, RefreshCw, Plus, Send, Eye, Undo2, Loader2 } from "lucide-react";
+import { Download, RefreshCw, Plus, Send, Eye, XCircle, Loader2 } from "lucide-react";
 import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
 
 interface EditorialNotes {
@@ -145,7 +145,7 @@ export function ResumeReview({
                 setOverrideNote("");
               }}
             >
-              Keep it <Undo2 className="h-3 w-3" />
+              Reject <XCircle className="h-3 w-3" />
             </Button>
           )}
         </div>
@@ -243,7 +243,7 @@ export function ResumeReview({
             onClick={onReturnToApplication}
             size="lg"
             disabled={overriding}
-            className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+            className="gap-2 bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)]"
           >
             <Send className="h-4 w-4" />
             Return to Application

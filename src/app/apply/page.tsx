@@ -381,7 +381,7 @@ export default function ApplyPage() {
           </Button>
         </div>
         <div className="flex gap-2 justify-center">
-          <Button onClick={handleMarkApplied} className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]">
+          <Button onClick={handleMarkApplied} className="gap-2 bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)]">
             <CheckCircle2 size={16} />
             I&apos;ve Submitted
           </Button>
@@ -605,7 +605,7 @@ export default function ApplyPage() {
           <Button
             onClick={handleSubmit}
             disabled={generatingResume}
-            className="flex-1 gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="flex-1 gap-2 bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)] disabled:opacity-50"
             size="lg"
           >
             <Send size={16} />

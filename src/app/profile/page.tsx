@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { PasteAndParse } from "@/components/profile/paste-and-parse";
 import { MergeEntries } from "@/components/profile/merge-entries";
 import { ProfileDisplay } from "@/components/profile/profile-display";
 import { DocumentsList } from "@/components/profile/documents-list";
+import { PortfolioLinks } from "@/components/profile/portfolio-links";
 import { AvatarUpload } from "@/components/profile/avatar-upload";
 import {
   Upload,
@@ -23,7 +25,9 @@ import {
   FileText,
   Globe,
   Pen,
+  Pencil,
   Plus,
+  Sparkles,
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -44,6 +48,24 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const uploadsScrollRef = useRef<HTMLDivElement>(null);
+
+  /** Close + menu when the user scrolls anywhere outside the menu (main, window, or file list). */
+  useLayoutEffect(() => {
+    if (!addMenuOpen) return;
+    const close = () => setAddMenuOpen(false);
+    const opts = { capture: true, passive: true } as const;
+    window.addEventListener("scroll", close, opts);
+    const main = document.querySelector("main");
+    main?.addEventListener("scroll", close, opts);
+    const uploads = uploadsScrollRef.current;
+    uploads?.addEventListener("scroll", close, opts);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      main?.removeEventListener("scroll", close, true);
+      uploads?.removeEventListener("scroll", close, true);
+    };
+  }, [addMenuOpen]);
 
   async function regenerateSummary() {
     if (!user) return;
@@ -100,6 +122,14 @@ export default function ProfilePage() {
     loadData();
   }, [loadData]);
 
+  // When opening upload/link/paste/manual from the + menu (or onboarding), scroll the panel into view
+  useEffect(() => {
+    if (!activeSection || activeSection === "merge") return;
+    const el = document.getElementById("profile-add-section");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeSection]);
+
   const hasDocuments = documents.length > 0;
   const hasLinks = urls.length > 0;
   const hasManualEntries = entries.some((e: { source: string }) => e.source === "manual_entry");
@@ -119,8 +149,19 @@ export default function ProfilePage() {
           avatarUrl={avatarUrl}
           onUpdate={loadData}
         />
-        <div>
-          <h1 className="text-2xl font-bold">{user?.user_metadata?.full_name || "Profile"}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              {user?.user_metadata?.full_name || "Profile"}
+            </h1>
+            <Link
+              href="/settings"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+              aria-label="Open settings"
+            >
+              <Pencil size={14} />
+            </Link>
+          </div>
           <p className="text-muted-foreground">
             {isNewUser
               ? "Get started by adding your experience."
@@ -137,19 +178,26 @@ export default function ProfilePage() {
               AI Summary
             </h3>
             <button
+              type="button"
               onClick={regenerateSummary}
               disabled={summaryLoading}
-              className="flex items-center gap-1 text-[11px] text-[var(--accent)] hover:text-[var(--accent-dark)] disabled:opacity-50"
+              aria-label={summaryLoading ? "Generating summary" : "Regenerate AI summary"}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 text-[var(--accent)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--accent-dark)] disabled:opacity-50"
             >
-              <RefreshCw size={12} className={summaryLoading ? "animate-spin" : ""} />
-              {summaryLoading ? "Generating..." : "Regenerate"}
+              <Sparkles size={15} strokeWidth={1.75} className="shrink-0" aria-hidden />
+              <RefreshCw
+                size={15}
+                strokeWidth={1.75}
+                className={summaryLoading ? "shrink-0 animate-spin" : "shrink-0"}
+                aria-hidden
+              />
             </button>
           </div>
           {summary ? (
             <p className="text-sm leading-relaxed text-[var(--text-primary)]">{summary}</p>
           ) : (
             <p className="text-sm italic text-[var(--text-faint)]">
-              {summaryLoading ? "Generating summary..." : "No summary yet. Click \"Regenerate\" to create one."}
+              {summaryLoading ? "Generating summary..." : "No summary yet. Use the button above to generate one."}
             </p>
           )}
         </div>
@@ -182,7 +230,10 @@ export default function ProfilePage() {
 
       {/* Active input section (full width, above the two-column layout) */}
       {activeSection && activeSection !== "merge" && (
-        <Card className="mb-8">
+        <Card
+          id="profile-add-section"
+          className="mb-8 scroll-mt-20 md:scroll-mt-8"
+        >
           <CardContent className="pt-6">
             {activeSection === "upload" && (
               <UploadDocuments onComplete={() => { loadData(); setActiveSection(null); showSnackbar("Document uploaded — processing in background"); }} />
@@ -235,22 +286,32 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Right column — Files & Links (top on mobile, right on desktop) */}
-          <div className="w-full md:w-[300px] md:flex-shrink-0 overflow-hidden">
-            <div className="md:sticky md:top-6 md:max-h-[calc(100vh-120px)] md:overflow-y-auto">
-              {/* Documents & URLs list with + button */}
-              <div className="mb-4">
+          {/* Right column — Portfolio fixed; only uploaded files list scrolls (desktop) */}
+          <div className="w-full md:w-[300px] md:flex-shrink-0">
+            <div className="flex flex-col gap-6 md:sticky md:top-6 md:max-h-[calc(100vh-120px)] md:min-h-0">
+              <div className="shrink-0">
+                <PortfolioLinks />
+              </div>
+              <div
+                ref={uploadsScrollRef}
+                className="flex min-h-0 flex-col md:flex-1 md:overflow-y-auto"
+              >
+                <div className="mb-4">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">Uploaded Files & Links</h2>
                   <div className="relative">
                     <button
+                      type="button"
                       onClick={() => setAddMenuOpen(!addMenuOpen)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)] transition-colors shadow-sm"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-black hover:bg-[var(--accent-dark)] transition-colors shadow-sm"
                     >
                       <Plus size={16} />
                     </button>
                     {addMenuOpen && (
-                      <div className="absolute top-full right-0 z-10 mt-2 w-52 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] py-1 shadow-lg">
+                      <div
+                        id="profile-file-add-menu"
+                        className="absolute top-full right-0 z-10 mt-2 w-52 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] py-1 shadow-lg"
+                      >
                         <button
                           onClick={() => openSection("upload")}
                           className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]"
@@ -284,6 +345,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <DocumentsList documents={documents} urls={urls} onUpdate={loadData} />
+                </div>
               </div>
             </div>
           </div>
