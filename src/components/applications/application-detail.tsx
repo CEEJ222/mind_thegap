@@ -2,56 +2,49 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { cn, getScoreTierIcon, getFitScoreColor } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Download, Eye, Sparkles } from "lucide-react";
-import { ResumePreviewModal } from "@/components/resume/resume-preview-modal";
+import { ArrowLeft } from "lucide-react";
 import type { Database, InterviewStatus } from "@/lib/types/database";
+import { GeneratedResumesPanel } from "@/components/applications/generated-resumes-panel";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
 type Theme = Database["public"]["Tables"]["application_themes"]["Row"];
-type Resume = Database["public"]["Tables"]["generated_resumes"]["Row"];
 
 interface Props {
   application: Application;
-  onBack: () => void;
+  /** When true, used inside the applications two-column layout (no back link; generated resumes live in the sidebar). */
+  embedded?: boolean;
+  onBack?: () => void;
   onUpdate: () => void;
 }
 
-export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
+export function ApplicationDetail({
+  application,
+  embedded = false,
+  onBack,
+  onUpdate,
+}: Props) {
   const supabase = createClient();
-  const router = useRouter();
   const [themes, setThemes] = useState<Theme[]>([]);
-  const [resumes, setResumes] = useState<Resume[]>([]);
   const [jdExpanded, setJdExpanded] = useState(false);
   const [jdSummary, setJdSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [previewResumeId, setPreviewResumeId] = useState<string | null>(null);
 
-  const loadDetails = useCallback(async () => {
-    const [themesRes, resumesRes] = await Promise.all([
-      supabase
-        .from("application_themes")
-        .select("*")
-        .eq("application_id", application.id)
-        .order("theme_weight", { ascending: false }),
-      supabase
-        .from("generated_resumes")
-        .select("*")
-        .eq("application_id", application.id)
-        .order("version", { ascending: false }),
-    ]);
-    if (themesRes.data) setThemes(themesRes.data);
-    if (resumesRes.data) setResumes(resumesRes.data);
+  const loadThemes = useCallback(async () => {
+    const { data } = await supabase
+      .from("application_themes")
+      .select("*")
+      .eq("application_id", application.id)
+      .order("theme_weight", { ascending: false });
+    if (data) setThemes(data);
   }, [application.id, supabase]);
 
   useEffect(() => {
-    loadDetails();
-  }, [loadDetails]);
+    loadThemes();
+  }, [loadThemes]);
 
   useEffect(() => {
     if (!application.jd_text) return;
@@ -65,32 +58,11 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
       }),
     })
       .then((r) => r.json())
-      .then((d) => { if (d.summary) setJdSummary(d.summary); })
+      .then((d) => {
+        if (d.summary) setJdSummary(d.summary);
+      })
       .finally(() => setSummaryLoading(false));
   }, [application.id, application.jd_text]);
-
-  async function handleDownload(filePath: string) {
-    try {
-      const fileName = `${application.company_name?.replace(/\s+/g, "_") || "resume"}_${application.job_title?.replace(/\s+/g, "_") || "role"}`;
-      const res = await fetch("/api/export-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_path: filePath, format: "docx", file_name: fileName }),
-      });
-      if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${fileName}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Download failed:", err);
-    }
-  }
 
   async function handleStatusChange(status: InterviewStatus) {
     await supabase
@@ -101,13 +73,15 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <button
-        onClick={onBack}
-        className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft size={16} /> Back to Applications
-      </button>
+    <div className={embedded ? "w-full min-w-0" : "mx-auto max-w-4xl"}>
+      {!embedded && onBack && (
+        <button
+          onClick={onBack}
+          className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft size={16} /> Back to Applications
+        </button>
+      )}
 
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -157,7 +131,6 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
           <CardTitle className="text-lg">Job Description</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* AI summary */}
           {summaryLoading && (
             <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
               <div className="h-3 w-3 animate-spin rounded-full border border-[var(--accent)] border-t-transparent" />
@@ -167,7 +140,9 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
           {jdSummary && !summaryLoading && (
             <div className="mb-4 flex items-start gap-2 rounded-md border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-3 py-2">
               <span className="mt-0.5 text-xs text-[var(--accent)]">✦</span>
-              <p className="text-sm italic text-[var(--text-muted)]">{jdSummary}</p>
+              <p className="text-sm italic text-[var(--text-muted)]">
+                {jdSummary}
+              </p>
             </div>
           )}
           <div className={jdExpanded ? "" : "relative"}>
@@ -209,9 +184,7 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{theme.theme_name}</span>
-                    <Badge
-                      variant={theme.score_tier}
-                    >
+                    <Badge variant={theme.score_tier}>
                       {theme.score_numeric}/100
                     </Badge>
                   </div>
@@ -227,81 +200,11 @@ export function ApplicationDetail({ application, onBack, onUpdate }: Props) {
         </Card>
       )}
 
-      {/* Resumes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Generated Resumes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {resumes.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                No resume generated yet for this application.
-              </p>
-              <Button
-                onClick={() =>
-                  router.push(`/generate?application_id=${application.id}`)
-                }
-                className="gap-2 bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)]"
-              >
-                <Sparkles className="h-4 w-4" />
-                Generate Resume
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {resumes.map((resume) => (
-                <div
-                  key={resume.id}
-                  className="flex items-center justify-between rounded-md border border-border p-3"
-                >
-                  <div>
-                    <span className="font-medium">Version {resume.version}</span>
-                    <span className="ml-2 text-sm text-muted-foreground">
-                      {resume.format.toUpperCase()} —{" "}
-                      {new Date(resume.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPreviewResumeId(resume.id)}
-                    >
-                      <Eye className="mr-1 h-3 w-3" /> Preview
-                    </Button>
-                    {resume.file_path && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownload(resume.file_path!)}
-                      >
-                        <Download className="mr-1 h-3 w-3" /> Download
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-2 gap-2"
-                onClick={() =>
-                  router.push(`/generate?application_id=${application.id}`)
-                }
-              >
-                <Sparkles className="h-3 w-3" />
-                Regenerate
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {previewResumeId && (
-        <ResumePreviewModal
-          resumeId={previewResumeId}
-          onClose={() => setPreviewResumeId(null)}
+      {!embedded && (
+        <GeneratedResumesPanel
+          variant="full"
+          application={application}
+          onUpdate={onUpdate}
         />
       )}
     </div>

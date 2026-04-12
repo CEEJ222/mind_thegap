@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
+import { GeneratedResumesPanel } from "@/components/applications/generated-resumes-panel";
 import { Briefcase, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
 
-const ATS_TYPES = new Set(['lever', 'greenhouse', 'ashby'])
+const ATS_TYPES = new Set(["lever", "greenhouse", "ashby"]);
 
 export default function ApplicationsPage() {
   const { user } = useAuth();
@@ -40,6 +41,17 @@ export default function ApplicationsPage() {
     loadApplications();
   }, [loadApplications]);
 
+  useEffect(() => {
+    if (applications.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId((prev) => {
+      if (prev && applications.some((a) => a.id === prev)) return prev;
+      return applications[0].id;
+    });
+  }, [applications]);
+
   async function handleStatusChange(appId: string, status: InterviewStatus) {
     await supabase
       .from("applications")
@@ -49,7 +61,6 @@ export default function ApplicationsPage() {
   }
 
   async function handleDelete(appId: string) {
-    // Themes and resumes cascade via FK
     await supabase.from("applications").delete().eq("id", appId);
     setDeletingId(null);
     loadApplications();
@@ -63,24 +74,16 @@ export default function ApplicationsPage() {
     );
   }
 
-  if (selectedId) {
-    const app = applications.find((a) => a.id === selectedId);
-    if (app) {
-      return (
-        <ApplicationDetail
-          application={app}
-          onBack={() => setSelectedId(null)}
-          onUpdate={loadApplications}
-        />
-      );
-    }
-  }
+  const selectedApp = selectedId
+    ? applications.find((a) => a.id === selectedId)
+    : null;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <h1 className="mb-2 text-2xl font-bold">Applications</h1>
       <p className="mb-8 text-muted-foreground">
-        Track every job you&apos;ve analyzed. Click a row to see the full details.
+        Track every job you&apos;ve analyzed. Select an application to see full
+        details.
       </p>
 
       {applications.length === 0 ? (
@@ -89,135 +92,152 @@ export default function ApplicationsPage() {
           <p>No applications yet. Analyze a job description to get started.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {/* Desktop header */}
-          <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
-            <div className="col-span-4">Company & Role</div>
-            <div className="col-span-2">Date</div>
-            <div className="col-span-2 text-center">Fit Score</div>
-            <div className="col-span-2 text-center">Status</div>
-            <div className="col-span-2 text-center">Actions</div>
+        <div className="flex flex-col-reverse gap-6 md:flex-row md:gap-8">
+          {/* Main column — detail */}
+          <div className="min-w-0 flex-1">
+            {selectedApp ? (
+              <ApplicationDetail
+                embedded
+                application={selectedApp}
+                onUpdate={loadApplications}
+              />
+            ) : null}
           </div>
 
-          {applications.map((app) => (
-            <Card
-              key={app.id}
-              className="cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => setSelectedId(app.id)}
-            >
-              {/* Desktop row */}
-              <CardContent className="hidden md:grid grid-cols-12 items-center gap-4 p-4">
-                <div className="col-span-4">
-                  <div className="font-medium">
-                    {app.company_name || "Unknown Company"}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {app.job_title || "Unknown Role"}
-                  </div>
-                </div>
-                <div className="col-span-2 text-sm text-muted-foreground">
-                  {new Date(app.created_at).toLocaleDateString()}
-                </div>
-                <div className="col-span-2 text-center">
-                  {app.fit_score !== null ? (
-                    <span className={cn("text-lg font-bold", getFitScoreColor(app.fit_score))}>
-                      {app.fit_score}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </div>
-                <div className="col-span-2 text-center" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    value={app.interview_converted}
-                    onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
-                    className="h-8 text-xs"
-                  >
-                    <option value="pending">Created</option>
-                    <option value="applied">Applied</option>
-                    <option value="yes">Interview</option>
-                    <option value="no">Rejected</option>
-                    <option value="closed">Closed</option>
-                  </Select>
-                </div>
-                <div className="col-span-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  {ATS_TYPES.has(app.source_type || '') && (
-                    <button
-                      onClick={() => router.push(`/apply?applicationId=${app.id}`)}
-                      title="Apply"
-                      className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+          {/* Side column — applications + generated resumes (matches profile sidebar) */}
+          <div className="w-full shrink-0 md:w-[300px]">
+            <div className="flex flex-col gap-6 md:sticky md:top-6 md:max-h-[calc(100vh-120px)] md:min-h-0">
+              <div className="flex min-h-0 flex-col gap-3">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                  Your applications
+                </h2>
+                <div className="flex min-h-0 flex-col gap-2 overflow-y-auto pr-0.5 md:max-h-[min(40vh,320px)]">
+                {applications.map((app) => {
+                  const isSel = app.id === selectedId;
+                  return (
+                    <Card
+                      key={app.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedId(app.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedId(app.id);
+                        }
+                      }}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        isSel
+                          ? "border-[var(--accent)] bg-[var(--accent)]/10 ring-1 ring-[var(--accent)]/40"
+                          : "hover:bg-muted/50"
+                      )}
                     >
-                      <Send size={14} />
-                    </button>
-                  )}
-                  {deletingId === app.id ? (
-                    <>
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-7 px-2 text-xs">Confirm</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-7 px-2 text-xs">Cancel</Button>
-                    </>
-                  ) : (
-                    <button onClick={() => setDeletingId(app.id)} className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium text-[var(--text-primary)]">
+                              {app.company_name || "Unknown Company"}
+                            </div>
+                            <div className="truncate text-xs text-[var(--text-muted)]">
+                              {app.job_title || "Unknown Role"}
+                            </div>
+                            <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--text-faint)]">
+                              {new Date(app.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                          {app.fit_score !== null && (
+                            <span
+                              className={cn(
+                                "shrink-0 text-lg font-bold leading-none",
+                                getFitScoreColor(app.fit_score)
+                              )}
+                            >
+                              {app.fit_score}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Select
+                            value={app.interview_converted}
+                            onChange={(e) =>
+                              handleStatusChange(
+                                app.id,
+                                e.target.value as InterviewStatus
+                              )
+                            }
+                            className="h-auto min-h-8 min-w-0 flex-1 py-1.5 pl-2 pr-7 text-xs leading-normal"
+                          >
+                            <option value="pending">Created</option>
+                            <option value="applied">Applied</option>
+                            <option value="yes">Interview</option>
+                            <option value="no">Rejected</option>
+                            <option value="closed">Closed</option>
+                          </Select>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {ATS_TYPES.has(app.source_type || "") && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  router.push(`/apply?applicationId=${app.id}`)
+                                }
+                                title="Apply"
+                                className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+                              >
+                                <Send size={14} />
+                              </button>
+                            )}
+                            {deletingId === app.id ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDelete(app.id)}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  Confirm
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setDeletingId(null)}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setDeletingId(app.id)}
+                                className="rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
                 </div>
-              </CardContent>
+              </div>
 
-              {/* Mobile card */}
-              <CardContent className="md:hidden p-4">
-                <div className="flex items-start justify-between mb-1">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-[var(--text-primary)] truncate">
-                      {app.company_name || "Unknown Company"}
-                    </div>
-                    <div className="text-sm text-[var(--text-muted)] truncate">
-                      {app.job_title || "Unknown Role"}
-                    </div>
-                    <div className="text-xs text-[var(--text-faint)] mt-0.5">
-                      {new Date(app.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  {app.fit_score !== null && (
-                    <span className={cn("text-2xl font-bold flex-shrink-0 ml-3", getFitScoreColor(app.fit_score))}>
-                      {app.fit_score}
-                    </span>
-                  )}
+              {selectedApp ? (
+                <div className="min-h-0 shrink-0 border-t border-[var(--border-subtle)] pt-4 md:flex-1 md:overflow-y-auto md:border-t-0 md:pt-0">
+                  <GeneratedResumesPanel
+                    variant="compact"
+                    application={selectedApp}
+                    onUpdate={loadApplications}
+                  />
                 </div>
-                <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    value={app.interview_converted}
-                    onChange={(e) => handleStatusChange(app.id, e.target.value as InterviewStatus)}
-                    className="h-auto py-1.5 text-xs leading-normal flex-1 min-w-0"
-                  >
-                    <option value="pending">Created</option>
-                    <option value="applied">Applied</option>
-                    <option value="yes">Interview</option>
-                    <option value="no">Rejected</option>
-                    <option value="closed">Closed</option>
-                  </Select>
-                  {ATS_TYPES.has(app.source_type || '') && (
-                    <button
-                      onClick={() => router.push(`/apply?applicationId=${app.id}`)}
-                      title="Apply"
-                      className="flex-shrink-0 rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
-                    >
-                      <Send size={14} />
-                    </button>
-                  )}
-                  {deletingId === app.id ? (
-                    <div className="flex gap-1 flex-shrink-0">
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(app.id)} className="h-8 px-2 text-xs">Delete</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)} className="h-8 px-2 text-xs">Cancel</Button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setDeletingId(app.id)} className="flex-shrink-0 rounded-md p-1.5 text-[var(--text-faint)] hover:text-[var(--red-muted)]">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
     </div>
