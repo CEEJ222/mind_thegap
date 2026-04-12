@@ -11,10 +11,15 @@
     "https://*.jobseek.fyi/*",
     "https://jobseek.fyi/*",
     "*://greenhouse.io/*",
+    "*://*.greenhouse.io/*",
     "*://boards.greenhouse.io/*",
+    "*://job-boards.greenhouse.io/*",
     "*://jobs.lever.co/*",
     "*://app.ashbyhq.com/*",
-    "*://linkedin.com/*"
+    "*://jobs.ashbyhq.com/*",
+    "*://*.ashbyhq.com/*",
+    "*://linkedin.com/*",
+    "*://*.linkedin.com/*"
   ],
   "side_panel": {
     "default_path": "sidepanel/index.html"
@@ -27,9 +32,12 @@
     {
       "matches": [
         "*://boards.greenhouse.io/*",
+        "*://job-boards.greenhouse.io/*",
         "*://*.greenhouse.io/*",
         "*://jobs.lever.co/*",
         "*://app.ashbyhq.com/*",
+        "*://jobs.ashbyhq.com/*",
+        "*://*.ashbyhq.com/*",
         "*://*.linkedin.com/jobs/*"
       ],
       "js": ["content/content.js"],

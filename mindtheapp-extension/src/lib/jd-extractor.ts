@@ -24,28 +24,91 @@ function detectAts(hostname: string): AtsType {
   return "generic";
 }
 
+/** Slug-to-title: "scopely-inc" → "Scopely Inc". */
+function prettifySlug(slug: string): string {
+  if (!slug) return "";
+  return decodeURIComponent(slug)
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Pick the DOM element that looks most like a job description body.
+ *
+ * Modern ATS pages wrap the JD in arbitrary div hierarchies with no stable
+ * class names. Heuristic: among candidate containers (main/article/section/
+ * div under main/body), choose the one with the longest text content that
+ * doesn't dominate the whole document (avoids picking <body> itself).
+ */
+function pickLargestTextBlock(root: ParentNode = document): Element | null {
+  const candidates = Array.from(
+    root.querySelectorAll(
+      "main, article, section, [role='main'], div[class*='content'], div[class*='description'], div[class*='body']",
+    ),
+  );
+  // Also scan all divs as a last resort — but cap to avoid O(n²) on giant DOMs.
+  if (candidates.length === 0) {
+    const divs = Array.from(root.querySelectorAll("div")).slice(0, 500);
+    candidates.push(...divs);
+  }
+
+  let best: { el: Element; length: number } | null = null;
+  for (const el of candidates) {
+    const text = (el.textContent ?? "").trim();
+    const len = text.length;
+    if (len < 400) continue;
+    // Reject elements that contain ~the entire document — those are the
+    // <body> or top-level wrappers, not the JD body.
+    const bodyLen = document.body?.textContent?.length ?? Infinity;
+    if (len > bodyLen * 0.95) continue;
+    if (!best || len > best.length) best = { el, length: len };
+  }
+  return best?.el ?? null;
+}
+
 function extractGreenhouse(): ExtractedJob | null {
-  // boards.greenhouse.io — #content .job-post holds the body
-  const container =
+  // Legacy boards.greenhouse.io layout.
+  const legacyContainer =
     document.querySelector("#content .job-post") ??
     document.querySelector("#content");
+  if (legacyContainer && (legacyContainer.textContent ?? "").length > 400) {
+    const jdText = normalizeText(legacyContainer.textContent ?? "");
+    const jobTitle =
+      textFrom(".app-title") ||
+      textFrom("h1.app-title") ||
+      textFrom("h1") ||
+      document.title;
+    const company =
+      textFrom(".company-name") ||
+      textFrom("span.company-name") ||
+      (document.title.split(" at ")[1] ?? "").trim() ||
+      prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? "");
+    return { jdText, jobTitle, company };
+  }
+
+  // Modern job-boards.greenhouse.io — React-rendered, no stable class names.
+  // URL shape: https://job-boards.greenhouse.io/{companySlug}/jobs/{jobId}
+  const container = pickLargestTextBlock();
   if (!container) return null;
 
   const jdText = normalizeText(container.textContent ?? "");
-  if (jdText.length < 50) return null;
+  if (jdText.length < 300) return null;
 
   const jobTitle =
-    textFrom(".app-title") ||
-    textFrom("h1.app-title") ||
     textFrom("h1") ||
+    textFrom("h2") ||
+    document.title.split(" - ")[0]?.trim() ||
     document.title;
 
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const companyFromPath = prettifySlug(pathParts[0] ?? "");
   const company =
-    textFrom(".company-name") ||
-    textFrom("span.company-name") ||
-    // Fallback: board company name often appears after "at "
-    (document.title.split(" at ")[1] ?? "").trim() ||
-    "";
+    // Prefer a visible company header if present.
+    textFrom("header h2") ||
+    textFrom("[class*='company']") ||
+    companyFromPath;
 
   return { jdText, jobTitle, company };
 }
@@ -65,43 +128,45 @@ function extractLever(): ExtractedJob | null {
     textFrom(".main-header-logo img[alt]") ||
     document.querySelector<HTMLImageElement>(".main-header-logo img")?.alt ||
     // Lever pages are at jobs.lever.co/{company}/...
-    decodeURIComponent(location.pathname.split("/").filter(Boolean)[0] ?? "");
+    prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? "");
 
   return { jdText, jobTitle, company };
 }
 
 function extractAshby(): ExtractedJob | null {
-  // TODO: Harden Ashby selectors. Ashby renders into a React shell with
-  // dynamic class names; we grab the largest text block in the job detail
-  // container as a placeholder.
+  // Ashby renders into a React shell with dynamic class names; fall back to
+  // the largest text block if the attribute selectors miss.
   const container =
     document.querySelector("[class*='_jobPostingBody']") ??
     document.querySelector("[class*='jobDescription']") ??
-    document.querySelector("main");
+    pickLargestTextBlock();
   if (!container) return null;
 
   const jdText = normalizeText(container.textContent ?? "");
-  if (jdText.length < 50) return null;
+  if (jdText.length < 300) return null;
 
   return {
     jdText,
     jobTitle: textFrom("h1") || document.title,
-    company: textFrom("[class*='_companyName']") || "",
+    company:
+      textFrom("[class*='_companyName']") ||
+      prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? ""),
   };
 }
 
 function extractLinkedIn(): ExtractedJob | null {
-  // TODO: LinkedIn DOM changes frequently; this is a best-effort placeholder.
+  // TODO: LinkedIn DOM changes frequently; best-effort placeholder.
   const card = document.querySelector(".job-details-jobs-unified-top-card");
   const description =
     document.querySelector(".jobs-description__content") ??
-    document.querySelector("#job-details");
+    document.querySelector("#job-details") ??
+    pickLargestTextBlock();
   if (!card && !description) return null;
 
   const jdText = normalizeText(
     [card?.textContent ?? "", description?.textContent ?? ""].join("\n"),
   );
-  if (jdText.length < 50) return null;
+  if (jdText.length < 300) return null;
 
   return {
     jdText,
@@ -115,21 +180,10 @@ function extractLinkedIn(): ExtractedJob | null {
 }
 
 function extractGeneric(): ExtractedJob | null {
-  // Largest <article>/<main>/<section> text block on the page.
-  const candidates = Array.from(
-    document.querySelectorAll("article, main, section, div"),
-  );
-  let best: { el: Element; length: number } | null = null;
-  for (const el of candidates) {
-    const len = (el.textContent ?? "").length;
-    if (len > 300 && (!best || len > best.length)) {
-      best = { el, length: len };
-    }
-  }
-  if (!best) return null;
-  const jdText = normalizeText(best.el.textContent ?? "");
-  if (jdText.length < 200) return null;
-
+  const container = pickLargestTextBlock();
+  if (!container) return null;
+  const jdText = normalizeText(container.textContent ?? "");
+  if (jdText.length < 400) return null;
   return {
     jdText,
     jobTitle: textFrom("h1") || document.title,
@@ -159,7 +213,20 @@ export function extractJobDescription(): JobDescriptionPayload | null {
       break;
   }
 
-  if (!extracted) return null;
+  if (!extracted) {
+    console.debug(
+      "[mindtheapp] no JD detected",
+      { atsType, host: location.hostname, url: location.href },
+    );
+    return null;
+  }
+
+  console.debug("[mindtheapp] JD detected", {
+    atsType,
+    jobTitle: extracted.jobTitle,
+    company: extracted.company,
+    jdLength: extracted.jdText.length,
+  });
 
   return {
     atsType,
