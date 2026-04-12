@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 
 export default function ProfilePage() {
-  const { user, refreshProfile } = useAuth();
+  const { user, loading: authLoading, refreshProfile } = useAuth();
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [entries, setEntries] = useState<any[]>([]);
@@ -48,6 +48,9 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  /** Gates the real page content until the first loadData() resolves so
+   *  the "new user" onboarding grid doesn't flash for signed-in users. */
+  const [initialLoad, setInitialLoad] = useState(true);
   const uploadsScrollRef = useRef<HTMLDivElement>(null);
 
   /** Close + menu when the user scrolls anywhere outside the menu (main, window, or file list). */
@@ -114,6 +117,7 @@ export default function ProfilePage() {
     if (userData?.profile_summary) setSummary(userData.profile_summary as string);
     if (userData?.avatar_url) setAvatarUrl(userData.avatar_url as string);
 
+    setInitialLoad(false);
     refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, refreshProfile]);
@@ -138,6 +142,15 @@ export default function ProfilePage() {
   function openSection(section: "upload" | "link" | "manual" | "paste") {
     setActiveSection(section);
     setAddMenuOpen(false);
+  }
+
+  // Show a skeleton until auth has resolved and we've loaded profile data
+  // at least once. Otherwise the empty-state arrays (entries/docs/urls)
+  // cause the "new user" onboarding grid to flash for returning users.
+  const showSkeleton = authLoading || (!!user && initialLoad);
+
+  if (showSkeleton) {
+    return <ProfileSkeleton />;
   }
 
   return (
@@ -351,6 +364,75 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Skeleton that mirrors the profile page layout: avatar + title row,
+ * summary card, and a two-column body. Prevents the new-user onboarding
+ * grid from flashing before the first data fetch resolves.
+ */
+function ProfileSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl animate-pulse" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading profile…</span>
+
+      {/* Header row: avatar + name + subtitle */}
+      <div className="mb-6 flex items-center gap-3 md:gap-5">
+        <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--bg-overlay)] md:h-20 md:w-20" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-6 w-48 rounded bg-[var(--bg-overlay)]" />
+          <div className="h-4 w-64 rounded bg-[var(--bg-overlay)]" />
+        </div>
+      </div>
+
+      {/* Summary card */}
+      <div className="mb-8 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5">
+        <div className="mb-3 h-3 w-24 rounded bg-[var(--bg-overlay)]" />
+        <div className="space-y-2">
+          <div className="h-3 w-full rounded bg-[var(--bg-overlay)]" />
+          <div className="h-3 w-11/12 rounded bg-[var(--bg-overlay)]" />
+          <div className="h-3 w-3/4 rounded bg-[var(--bg-overlay)]" />
+        </div>
+      </div>
+
+      {/* Two-column body */}
+      <div className="flex flex-col-reverse gap-6 md:flex-row md:gap-8">
+        <div className="flex-1 min-w-0 space-y-4">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5"
+            >
+              <div className="mb-3 h-4 w-1/3 rounded bg-[var(--bg-overlay)]" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-[var(--bg-overlay)]" />
+                <div className="h-3 w-5/6 rounded bg-[var(--bg-overlay)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="w-full md:w-[300px] md:flex-shrink-0">
+          <div className="flex flex-col gap-6">
+            <div className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5">
+              <div className="mb-3 h-4 w-24 rounded bg-[var(--bg-overlay)]" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-[var(--bg-overlay)]" />
+                <div className="h-3 w-3/4 rounded bg-[var(--bg-overlay)]" />
+              </div>
+            </div>
+            <div className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5">
+              <div className="mb-3 h-4 w-32 rounded bg-[var(--bg-overlay)]" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-[var(--bg-overlay)]" />
+                <div className="h-3 w-5/6 rounded bg-[var(--bg-overlay)]" />
+                <div className="h-3 w-2/3 rounded bg-[var(--bg-overlay)]" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
