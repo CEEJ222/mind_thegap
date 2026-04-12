@@ -8,31 +8,49 @@ export interface JobDescriptionPayload {
   pageUrl: string;
 }
 
-export type ThemeTier = "strong" | "weak" | "none";
+/** Theme tiers from the analyze prompt. */
+export type ScoreTier = "strong" | "weak" | "none";
 
-export interface ThemeResult {
+/** Row shape returned by POST /api/analyze for each theme. */
+export interface AnalysisTheme {
   id: string;
-  label: string;
-  tier: ThemeTier;
+  application_id: string;
+  theme_name: string;
+  theme_weight: number;
+  score_tier: ScoreTier;
   score_numeric: number;
-  evidence?: string;
+  explanation: string;
+  evidence_chunk_ids: string[];
 }
 
+/** Response body of POST /api/analyze. */
 export interface AnalyzeResponse {
-  applicationId: string;
-  overallFit: number;
-  themes: ThemeResult[];
+  application_id: string;
+  company_name: string;
+  job_title: string;
+  fit_score: number;
+  themes: AnalysisTheme[];
 }
 
+/** Response body of POST /api/generate-resume.
+ *  The resume markdown lives at `editorial_notes.resume_content`. */
 export interface GenerateResumeResponse {
-  resumeText: string;
-  applicationId: string;
+  resume_id: string;
+  file_path: string;
+  editorial_notes: {
+    resume_content?: string;
+    shortened?: Array<{ role: string; reason: string }>;
+    omitted?: Array<{ role: string; reason: string }>;
+    prioritized?: string[];
+  };
 }
 
+/** Response body of GET /api/profile. */
 export interface ProfileResponse {
-  id: string;
-  email: string;
-  name?: string;
+  user_id: string;
+  email: string | null;
+  has_profile: boolean;
+  profile_chunk_count: number;
 }
 
 /** Messages exchanged with the background service worker. */

@@ -160,7 +160,7 @@ export default function GeneratePage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jd_text: jdText, user_id: user.id }),
+        body: JSON.stringify({ jd_text: jdText }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -183,7 +183,6 @@ export default function GeneratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           application_id: analysis.application_id,
-          user_id: user.id,
         }),
       });
       const data = await res.json();
@@ -270,7 +269,7 @@ export default function GeneratePage() {
       const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jd_text: item.jdText, user_id: user.id }),
+        body: JSON.stringify({ jd_text: item.jdText }),
       });
       const analyzeData = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(analyzeData.error);
@@ -282,7 +281,6 @@ export default function GeneratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           application_id: analyzeData.application_id,
-          user_id: user.id,
         }),
       });
       const genData = await genRes.json();

@@ -206,7 +206,6 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
         body: JSON.stringify({
           theme_id: themeId,
           application_id: analysis.application_id,
-          user_id: user.id,
         }),
       });
 

@@ -1,8 +1,8 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import type { ThemeTier } from "@/lib/types";
+import type { ScoreTier } from "@/lib/types";
 
-const tierStyles: Record<ThemeTier, string> = {
+const tierStyles: Record<ScoreTier, string> = {
   strong: "bg-tier-strong/15 text-tier-strong border-tier-strong/30",
   weak: "bg-tier-weak/15 text-tier-weak border-tier-weak/40",
   none: "bg-tier-none/15 text-tier-none border-tier-none/40",
@@ -12,7 +12,7 @@ export function TierBadge({
   tier,
   className,
 }: {
-  tier: ThemeTier;
+  tier: ScoreTier;
   className?: string;
 }): React.ReactElement {
   return (

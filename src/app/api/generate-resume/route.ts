@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireAuthedUser } from "@/lib/api-auth";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
 import {
   formatThemeEvidenceForPrompt,
@@ -8,13 +9,16 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthedUser(request);
+    if (auth instanceof NextResponse) return auth;
+    const user_id = auth.userId;
+
     const reqBody = await request.json();
     const application_id = reqBody.application_id as string;
-    const user_id = reqBody.user_id as string;
 
-    if (!application_id || !user_id) {
+    if (!application_id) {
       return NextResponse.json(
-        { error: "Missing application_id or user_id" },
+        { error: "Missing application_id" },
         { status: 400 }
       );
     }
@@ -70,6 +74,14 @@ export async function POST(request: NextRequest) {
     if (!application) {
       return NextResponse.json(
         { error: "Application not found", debug: { appError: appRes.error?.message, appDataLength: appRes.data?.length } },
+        { status: 404 }
+      );
+    }
+
+    // Ownership check — only generate resumes for applications the caller owns
+    if (application.user_id !== user_id) {
+      return NextResponse.json(
+        { error: "Application not found" },
         { status: 404 }
       );
     }
