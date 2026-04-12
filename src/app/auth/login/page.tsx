@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +20,27 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [extensionHandoff, setExtensionHandoff] = useState(false);
   const supabase = createClient();
+  const autoHandoffAttempted = useRef(false);
+
+  // If the user is already signed in and the Mind the App extension
+  // kicked off this flow (?extension=true), forward the existing session
+  // token to the extension immediately — no need to make them re-enter
+  // their password.
+  useEffect(() => {
+    if (autoHandoffAttempted.current) return;
+    if (!isExtensionAuthFlow()) return;
+    autoHandoffAttempted.current = true;
+
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await sendTokenToExtension(session.access_token);
+        setExtensionHandoff(true);
+      }
+    })();
+  }, [supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

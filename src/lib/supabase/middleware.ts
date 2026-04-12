@@ -53,6 +53,17 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && (request.nextUrl.pathname === "/" || request.nextUrl.pathname.startsWith("/auth/"))) {
+    // Don't redirect signed-in users away from /auth/* when the Mind the
+    // App extension initiated the flow — the login page needs to run so
+    // it can forward the current session token to the extension via
+    // chrome.runtime.sendMessage.
+    const isExtensionFlow =
+      request.nextUrl.searchParams.get("extension") === "true" ||
+      request.nextUrl.searchParams.get("extension") === "1";
+    if (isExtensionFlow) {
+      return supabaseResponse;
+    }
+
     const url = request.nextUrl.clone();
     url.pathname = "/generate";
     const redirectResponse = NextResponse.redirect(url);
