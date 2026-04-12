@@ -1,6 +1,8 @@
 import { extractJobDescription } from "../lib/jd-extractor";
 import type { ExtensionMessage, JobDescriptionPayload } from "../lib/types";
 
+console.debug("[mindtheapp] content script loaded on", location.href);
+
 const BADGE_ID = "mindtheapp-badge";
 
 function injectBadge(): void {
