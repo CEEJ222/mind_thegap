@@ -9,28 +9,35 @@ import {
   rmSync,
   readdirSync,
 } from "fs";
+import { build as esbuild } from "esbuild";
 
 /**
  * Multi-entry Vite build for a Chrome Manifest V3 extension.
  *
- * We run Vite twice via separate build configs, but to keep a single
- * command we use a single config with multi-entry rollup input for the
- * side panel HTML plus a plugin that invokes separate builds for the
- * content script and service worker as IIFE bundles.
+ * - Side panel (React HTML) and background service worker are produced by
+ *   Vite's normal Rollup pipeline. The service worker is declared as
+ *   `"type": "module"` in manifest.json, so ES-module output is fine.
+ * - Content scripts are bundled as classic IIFE scripts via a direct
+ *   esbuild invocation inside the finalize hook. MV3 content scripts are
+ *   injected as classic scripts and must not contain ES-module syntax or
+ *   cross-chunk imports, which Rollup's ES-format output can introduce
+ *   even for "entry" files. Bundling them with esbuild's iife format
+ *   guarantees a self-contained file.
  */
 export default defineConfig({
   plugins: [
     react(),
     {
       name: "mindtheapp-finalize",
-      closeBundle() {
-        const distDir = resolve(__dirname, "dist");
+      async closeBundle() {
+        const root = __dirname;
+        const distDir = resolve(root, "dist");
         if (!existsSync(distDir)) mkdirSync(distDir, { recursive: true });
 
-        // Copy manifest.json into dist for zipping / loading unpacked.
+        // Copy manifest.json into dist for loading unpacked / zipping.
         try {
           copyFileSync(
-            resolve(__dirname, "manifest.json"),
+            resolve(root, "manifest.json"),
             resolve(distDir, "manifest.json"),
           );
         } catch {
@@ -38,7 +45,7 @@ export default defineConfig({
         }
 
         // Copy icons if present.
-        const iconSrcDir = resolve(__dirname, "public/icons");
+        const iconSrcDir = resolve(root, "public/icons");
         if (existsSync(iconSrcDir)) {
           const iconDestDir = resolve(distDir, "icons");
           mkdirSync(iconDestDir, { recursive: true });
@@ -50,15 +57,14 @@ export default defineConfig({
           }
         }
 
-        // Vite places html entries at dist/<relative-path-from-root>, so our
-        // sidepanel lands at dist/src/sidepanel/index.html. Move it to the
-        // location the manifest expects.
+        // Vite places html entries at dist/<relative-path-from-root>, so
+        // our side panel lands at dist/src/sidepanel/index.html. Move it
+        // to the location the manifest expects.
         const builtHtml = resolve(distDir, "src/sidepanel/index.html");
         const targetHtml = resolve(distDir, "sidepanel/index.html");
         if (existsSync(builtHtml)) {
           mkdirSync(dirname(targetHtml), { recursive: true });
           renameSync(builtHtml, targetHtml);
-          // Clean up the now-empty dist/src tree.
           try {
             rmSync(resolve(distDir, "src"), {
               recursive: true,
@@ -67,6 +73,29 @@ export default defineConfig({
           } catch {
             /* ignore */
           }
+        }
+
+        // Bundle content scripts as classic IIFE files. Each entry is
+        // built standalone so the output contains no import/export and
+        // can be injected directly by Chrome.
+        const contentOutDir = resolve(distDir, "content");
+        mkdirSync(contentOutDir, { recursive: true });
+        const contentEntries: Array<[string, string]> = [
+          [resolve(root, "src/content/index.ts"), "content.js"],
+          [resolve(root, "src/content/auth-bridge.ts"), "auth-bridge.js"],
+        ];
+        for (const [entry, outfile] of contentEntries) {
+          await esbuild({
+            entryPoints: [entry],
+            bundle: true,
+            format: "iife",
+            target: "chrome110",
+            platform: "browser",
+            outfile: resolve(contentOutDir, outfile),
+            minify: true,
+            legalComments: "none",
+            logLevel: "warning",
+          });
         }
       },
     },
@@ -88,25 +117,15 @@ export default defineConfig({
       input: {
         sidepanel: resolve(__dirname, "src/sidepanel/index.html"),
         background: resolve(__dirname, "src/background/index.ts"),
-        content: resolve(__dirname, "src/content/index.ts"),
-        "auth-bridge": resolve(__dirname, "src/content/auth-bridge.ts"),
       },
       output: {
         entryFileNames: (chunk) => {
           if (chunk.name === "background") return "background/background.js";
-          if (chunk.name === "content") return "content/content.js";
-          if (chunk.name === "auth-bridge") return "content/auth-bridge.js";
           return "assets/[name]-[hash].js";
         },
         chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: (asset) => {
-          if (asset.name && asset.name.endsWith(".css")) {
-            return "assets/[name]-[hash][extname]";
-          }
-          return "assets/[name]-[hash][extname]";
-        },
+        assetFileNames: "assets/[name]-[hash][extname]",
         format: "es",
-        inlineDynamicImports: false,
       },
     },
   },
