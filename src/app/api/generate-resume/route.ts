@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
+import {
+  formatThemeEvidenceForPrompt,
+  type ThemeForEvidence,
+} from "@/lib/theme-evidence-prompt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,6 +87,12 @@ export async function POST(request: NextRequest) {
           `${t.theme_name} (${t.score_tier}, weight: ${t.theme_weight}): ${t.explanation}`
       )
       .join("\n");
+
+    const themeEvidenceBlock = await formatThemeEvidenceForPrompt(
+      supabase,
+      user_id,
+      themes as ThemeForEvidence[]
+    );
 
     const lengthMap: Record<string, string> = {
       "1_page": "strictly 1 page maximum",
@@ -194,7 +204,7 @@ ${application.jd_text}
 ## Gap Analysis Results
 ${themesSummary}
 
-## Candidate Profile Data
+${themeEvidenceBlock ? `${themeEvidenceBlock}\n\n` : ""}## Candidate Profile Data (full profile — use together with theme-ranked evidence above)
 ${profileData}
 
 ## Settings
@@ -204,7 +214,7 @@ ${profileData}
 ## Instructions
 1. The FIRST LINE of the resume MUST be the contact header exactly as provided above — name, LinkedIn, email, phone, location separated by pipes.
 2. Structure the resume optimally for this role (decide whether to lead with skills, summary, or experience).
-3. Emphasize bullets that directly match JD themes — surface them earlier.
+3. Emphasize bullets that directly match JD themes — surface them earlier; prefer details from **Theme-ranked evidence** when they align with a theme.
 4. Enforce the length setting using the editorial decision framework above.
 5. Full-time roles first (chronological), then contract/temporary roles labeled and grouped.
 6. Track your editorial decisions with specific, evidence-based reasoning.

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import { requestEmbedProfileChunkIds } from "@/lib/embed-profile-chunks-client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ScoreTier } from "@/lib/types/database";
@@ -176,13 +177,28 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
         entryId = newEntry.id;
       }
 
-      await supabase.from("profile_chunks").insert({
-        user_id: user.id,
-        entry_id: entryId,
-        chunk_text: gapFillText,
-        company_name: gapFillCompany || null,
-        source: "gap_fill",
-      });
+      const { data: gapChunk, error: gapChunkError } = await supabase
+        .from("profile_chunks")
+        .insert({
+          user_id: user.id,
+          entry_id: entryId,
+          chunk_text: gapFillText,
+          company_name: gapFillCompany || null,
+          source: "gap_fill",
+        })
+        .select("id")
+        .single();
+
+      if (gapChunkError) throw gapChunkError;
+
+      let embedFailed = false;
+      if (gapChunk?.id) {
+        const embedResult = await requestEmbedProfileChunkIds([gapChunk.id]);
+        embedFailed = !embedResult.ok;
+        if (!embedResult.ok) {
+          console.error("Embedding failed after gap fill:", embedResult.error);
+        }
+      }
 
       const res = await fetch("/api/analyze", {
         method: "PATCH",
@@ -211,7 +227,11 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
       setGapFillText("");
       setGapFillCompany("");
       setDisputeTheme(null);
-      showSnackbar("Gap filled — theme rescored");
+      showSnackbar(
+        embedFailed
+          ? "Gap filled — theme rescored (embedding failed; check console)"
+          : "Gap filled — theme rescored"
+      );
     } catch (err) {
       console.error("Gap fill failed:", err);
       showSnackbar("Failed to save gap fill", "error");
@@ -307,7 +327,7 @@ export function GapAnalysis({ analysis, onGenerate, generating, onBack, onUpdate
                   {bullets.length > 0 && (
                     <ul className="space-y-1.5">
                       {bullets.map((bullet, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-[#5A5045]">
+                        <li key={i} className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
                           <span className={`mt-0.5 ${getArrowColor(theme.score_tier)}`}>&#8250;</span>
                           <span>{bullet.replace(/^[-•·]\s*/, "")}</span>
                         </li>

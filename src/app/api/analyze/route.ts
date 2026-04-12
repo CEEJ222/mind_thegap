@@ -6,6 +6,8 @@ import {
   normalizeScoreTier,
 } from "@/lib/analysis-payload";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
+import { createEmbeddingsForTexts } from "@/lib/embeddings";
+import { matchNearestProfileChunkIds } from "@/lib/profile-chunk-retrieval";
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,20 +140,65 @@ Return ONLY valid JSON, no markdown fences.`,
       application = inserted;
     }
 
+    let evidencePerTheme: string[][] = [];
+    if (analysis.themes.length > 0) {
+      const themeQueries = analysis.themes.map(
+        (t) => `${t.theme_name}\n\n${t.explanation}`
+      );
+      try {
+        const vectors = await createEmbeddingsForTexts(themeQueries);
+        // No fallback to weaker neighbors: empty [] is correct when nothing meets similarity threshold
+        // (e.g. "none" tier themes should not get loosely related filler chunks).
+        evidencePerTheme = await Promise.all(
+          vectors.map(async (vec, idx) => {
+            const theme = analysis.themes[idx];
+            try {
+              const ids = await matchNearestProfileChunkIds(
+                supabase,
+                user_id,
+                vec,
+                5
+              );
+              console.debug(
+                `[analyze] Theme "${theme.theme_name}": ${ids.length} chunks above threshold`
+              );
+              return ids;
+            } catch (e) {
+              console.error(
+                `[analyze] evidence retrieval failed for theme index ${idx}:`,
+                e
+              );
+              console.debug(
+                `[analyze] Theme "${theme.theme_name}": 0 chunks above threshold (retrieval error)`
+              );
+              return [];
+            }
+          })
+        );
+      } catch (e) {
+        console.error("[analyze] theme embedding batch failed:", e);
+        evidencePerTheme = analysis.themes.map(() => []);
+      }
+    }
+
     const themesToInsert = analysis.themes.map(
-      (t: {
-        theme_name: string;
-        theme_weight: number;
-        score_tier: string;
-        score_numeric: number;
-        explanation: string;
-      }) => ({
+      (
+        t: {
+          theme_name: string;
+          theme_weight: number;
+          score_tier: string;
+          score_numeric: number;
+          explanation: string;
+        },
+        i: number
+      ) => ({
         application_id: application.id,
         theme_name: t.theme_name,
         theme_weight: t.theme_weight,
         score_tier: t.score_tier,
         score_numeric: t.score_numeric,
         explanation: t.explanation,
+        evidence_chunk_ids: evidencePerTheme[i] ?? [],
       })
     );
 

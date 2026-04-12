@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
+import { embedAndUpdateProfileChunks } from "@/lib/embeddings";
 import mammoth from "mammoth";
 
 interface EntryInfo {
@@ -264,6 +265,8 @@ Return ONLY valid JSON.`,
       date_end: e.date_end,
     }));
 
+    const insertedChunksForEmbedding: { id: string; chunk_text: string }[] = [];
+
     // Step 3: Match and insert/merge each entry
     for (const entry of parsed.entries) {
       const matchId = findMatch(
@@ -329,20 +332,54 @@ Return ONLY valid JSON.`,
         );
 
         if (!isDuplicate) {
-          await supabase.from("profile_chunks").insert({
-            user_id,
-            entry_id: entryId,
-            chunk_text: chunkText,
-            company_name: chunkMeta.company_name,
-            job_title: chunkMeta.job_title,
-            date_start: chunkMeta.date_start,
-            date_end: chunkMeta.date_end,
-            industry: entry.industry,
-            domain: entry.domain,
-            entry_type: chunkMeta.entry_type,
-            source: "resume_upload",
-          });
+          const { data: inserted, error: insertChunkError } = await supabase
+            .from("profile_chunks")
+            .insert({
+              user_id,
+              entry_id: entryId,
+              chunk_text: chunkText,
+              company_name: chunkMeta.company_name,
+              job_title: chunkMeta.job_title,
+              date_start: chunkMeta.date_start,
+              date_end: chunkMeta.date_end,
+              industry: entry.industry,
+              domain: entry.domain,
+              entry_type: chunkMeta.entry_type,
+              source: "resume_upload",
+            })
+            .select("id, chunk_text")
+            .single();
+
+          if (insertChunkError) {
+            console.error(
+              "[process-document] profile_chunks insert failed:",
+              insertChunkError
+            );
+            throw new Error(insertChunkError.message);
+          }
+          if (inserted?.id && inserted.chunk_text) {
+            insertedChunksForEmbedding.push({
+              id: inserted.id,
+              chunk_text: inserted.chunk_text,
+            });
+          }
         }
+      }
+    }
+
+    if (insertedChunksForEmbedding.length > 0) {
+      const embedResult = await embedAndUpdateProfileChunks(
+        supabase,
+        insertedChunksForEmbedding
+      );
+      if (!embedResult.ok) {
+        console.error(
+          "[process-document] embedding generation failed:",
+          embedResult.error
+        );
+        throw new Error(
+          `Embedding generation failed: ${embedResult.error ?? "unknown"}`
+        );
       }
     }
 

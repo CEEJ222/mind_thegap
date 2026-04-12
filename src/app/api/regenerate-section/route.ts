@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chatCompletion, MODELS } from "@/lib/openrouter";
+import {
+  formatThemeEvidenceForPrompt,
+  type ThemeForEvidence,
+} from "@/lib/theme-evidence-prompt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -108,6 +112,12 @@ export async function POST(request: NextRequest) {
       )
       .join("\n");
 
+    const themeEvidenceBlock = await formatThemeEvidenceForPrompt(
+      supabase,
+      user_id,
+      (themes ?? []) as ThemeForEvidence[]
+    );
+
     const text = await chatCompletion({
       model: MODELS.REASONING,
       messages: [
@@ -169,7 +179,7 @@ ${application.jd_text}
 ## Gap Analysis Results
 ${themesSummary}
 
-## Candidate Profile Data
+${themeEvidenceBlock ? `${themeEvidenceBlock}\n\n` : ""}## Candidate Profile Data (full profile — use together with theme-ranked evidence above)
 ${profileData}
 
 ## Previous Resume Content (for reference)

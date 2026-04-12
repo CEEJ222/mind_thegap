@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { requestEmbedProfileChunkIds } from "@/lib/embed-profile-chunks-client";
 import { showSnackbar } from "@/components/ui/snackbar";
 import { formatDate } from "@/lib/utils";
 import { Pencil, Check, X, Trash2, Plus, Link as LinkIcon, Loader2, Merge, Briefcase, GraduationCap, Award, FolderOpen, Wrench } from "lucide-react";
@@ -100,25 +101,41 @@ export function ProfileDisplay({ entries, chunks, onUpdate, onMerge, mergeActive
       await supabase.from("profile_chunks").delete().eq("id", chunkId);
     }
 
+    const chunkIdsToEmbed: string[] = [];
+
     // Update each chunk
     for (const chunk of editChunks) {
       if (chunk.id.startsWith("new-")) {
         // New chunk — insert
         if (chunk.text.trim()) {
-          await supabase.from("profile_chunks").insert({
-            user_id: entries.find((e: { id: string }) => e.id === entryId)?.user_id,
-            entry_id: entryId,
-            chunk_text: chunk.text.trim(),
-            source: "manual_entry",
-          });
+          const { data: inserted, error: insErr } = await supabase
+            .from("profile_chunks")
+            .insert({
+              user_id: entries.find((e: { id: string }) => e.id === entryId)?.user_id,
+              entry_id: entryId,
+              chunk_text: chunk.text.trim(),
+              source: "manual_entry",
+            })
+            .select("id")
+            .single();
+          if (insErr) {
+            showSnackbar("Failed to save bullet", "error");
+            return;
+          }
+          if (inserted?.id) chunkIdsToEmbed.push(inserted.id);
         }
       } else {
         // Existing chunk — update
         if (chunk.text.trim()) {
-          await supabase
+          const { error: upErr } = await supabase
             .from("profile_chunks")
             .update({ chunk_text: chunk.text.trim(), user_confirmed: true })
             .eq("id", chunk.id);
+          if (upErr) {
+            showSnackbar("Failed to save bullet", "error");
+            return;
+          }
+          chunkIdsToEmbed.push(chunk.id);
         } else {
           // Empty text — delete the chunk
           await supabase.from("profile_chunks").delete().eq("id", chunk.id);
@@ -126,11 +143,20 @@ export function ProfileDisplay({ entries, chunks, onUpdate, onMerge, mergeActive
       }
     }
 
+    const embedResult = await requestEmbedProfileChunkIds(chunkIdsToEmbed);
     setEditingId(null);
     setEditData({});
     setEditChunks([]);
     setRemovedChunkIds([]);
-    showSnackbar("Entry updated");
+    if (!embedResult.ok) {
+      console.error("Embedding failed after profile edit:", embedResult.error);
+      showSnackbar(
+        "Changes saved, but embedding failed — semantic search may be stale.",
+        "error"
+      );
+    } else {
+      showSnackbar("Entry updated");
+    }
     onUpdate();
   }
 

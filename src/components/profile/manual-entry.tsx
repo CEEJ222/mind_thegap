@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import type { EntryType } from "@/lib/types/database";
+import { requestEmbedProfileChunkIds } from "@/lib/embed-profile-chunks-client";
 
 interface Props {
   onComplete: () => void;
@@ -55,19 +56,32 @@ export function ManualEntry({ onComplete }: Props) {
         .filter((c) => c.length > 0);
 
       if (chunks.length > 0) {
-        await supabase.from("profile_chunks").insert(
-          chunks.map((chunk) => ({
-            user_id: user.id,
-            entry_id: entry.id,
-            chunk_text: chunk,
-            company_name: companyName || null,
-            job_title: jobTitle || null,
-            date_start: dateStart || null,
-            date_end: dateEnd || null,
-            entry_type: entryType,
-            source: "manual_entry" as const,
-          }))
-        );
+        const { data: insertedChunks, error: chunkError } = await supabase
+          .from("profile_chunks")
+          .insert(
+            chunks.map((chunk) => ({
+              user_id: user.id,
+              entry_id: entry.id,
+              chunk_text: chunk,
+              company_name: companyName || null,
+              job_title: jobTitle || null,
+              date_start: dateStart || null,
+              date_end: dateEnd || null,
+              entry_type: entryType,
+              source: "manual_entry" as const,
+            }))
+          )
+          .select("id");
+
+        if (chunkError) throw chunkError;
+
+        const ids = (insertedChunks ?? [])
+          .map((c: { id: string }) => c.id)
+          .filter(Boolean) as string[];
+        const embedResult = await requestEmbedProfileChunkIds(ids);
+        if (!embedResult.ok) {
+          console.error("Embedding failed after manual entry:", embedResult.error);
+        }
       }
 
       // Reset form
