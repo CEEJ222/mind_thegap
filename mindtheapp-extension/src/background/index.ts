@@ -7,7 +7,7 @@ import type {
 } from "../lib/types";
 import { isAuthenticated } from "../lib/auth";
 
-const AUTH_URL = "https://jobseek.fyi/auth/login?extension=true";
+const AUTH_URL = "https://www.jobseek.fyi/auth/login?extension=true";
 
 /**
  * In-memory cache of the most recently detected JD, keyed by tabId. The
