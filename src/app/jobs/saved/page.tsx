@@ -119,7 +119,7 @@ export default function SavedJobsPage() {
       const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jd_text: job.description_text, user_id: user.id }),
+        body: JSON.stringify({ jd_text: job.description_text }),
       });
       const analyzeData = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(analyzeData.error);
@@ -132,7 +132,6 @@ export default function SavedJobsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           application_id: analyzeData.application_id,
-          user_id: user.id,
         }),
       });
       const genData = await genRes.json();

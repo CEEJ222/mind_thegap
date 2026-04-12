@@ -309,7 +309,7 @@ export default function ApplyPage() {
       const res = await fetch("/api/generate-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ application_id: parseResult.applicationId, user_id: user.id }),
+        body: JSON.stringify({ application_id: parseResult.applicationId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Resume generation failed");

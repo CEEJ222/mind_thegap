@@ -8,6 +8,7 @@ import {
   generateResume,
   getApplicationDeepLink,
   getProfile,
+  getProfileDeepLink,
 } from "@/lib/api";
 import type {
   AnalyzeResponse,
@@ -15,27 +16,40 @@ import type {
   GetAuthStateResponse,
   GetCurrentJdResponse,
   JobDescriptionPayload,
+  ProfileResponse,
 } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
 type View =
   | { kind: "loading" }
   | { kind: "unauthenticated" }
-  | { kind: "authenticated-no-jd" }
-  | { kind: "jd-detected"; jd: JobDescriptionPayload }
-  | { kind: "analyzing"; jd: JobDescriptionPayload }
+  | { kind: "no-profile"; profile: ProfileResponse }
+  | { kind: "authenticated-no-jd"; profile: ProfileResponse }
+  | {
+      kind: "jd-detected";
+      profile: ProfileResponse;
+      jd: JobDescriptionPayload;
+    }
+  | {
+      kind: "analyzing";
+      profile: ProfileResponse;
+      jd: JobDescriptionPayload;
+    }
   | {
       kind: "results";
+      profile: ProfileResponse;
       jd: JobDescriptionPayload;
       analysis: AnalyzeResponse;
     }
   | {
       kind: "generating";
+      profile: ProfileResponse;
       jd: JobDescriptionPayload;
       analysis: AnalyzeResponse;
     }
   | {
       kind: "resume-ready";
+      profile: ProfileResponse;
       jd: JobDescriptionPayload;
       analysis: AnalyzeResponse;
       resume: GenerateResumeResponse;
@@ -77,42 +91,57 @@ export default function App(): React.ReactElement {
       return;
     }
 
-    // Sanity check the token with /api/profile — if it's stale the API
-    // layer will clear it and throw a 401.
+    // Validate the stored token with /api/profile. The API layer clears
+    // the token on 401, so a fresh hydrate cycle drops the UI back to
+    // the unauthenticated state.
+    let profile: ProfileResponse;
     try {
-      await getProfile();
+      profile = await getProfile();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setView({ kind: "unauthenticated" });
         return;
       }
-      // For other errors we still let the user proceed; they may be offline.
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not reach jobseek.fyi",
+      );
+      setView({ kind: "unauthenticated" });
+      return;
+    }
+
+    if (!profile.has_profile) {
+      setView({ kind: "no-profile", profile });
+      return;
     }
 
     const jdResp = await sendBgMessage<GetCurrentJdResponse>({
       type: "GET_CURRENT_JD",
     });
     if (jdResp?.jd) {
-      setView({ kind: "jd-detected", jd: jdResp.jd });
+      setView({ kind: "jd-detected", profile, jd: jdResp.jd });
     } else {
-      setView({ kind: "authenticated-no-jd" });
+      setView({ kind: "authenticated-no-jd", profile });
     }
   }, []);
 
   useEffect(() => {
     void hydrate();
 
-    const listener = (msg: { type?: string; payload?: JobDescriptionPayload }) => {
+    const listener = (msg: {
+      type?: string;
+      payload?: JobDescriptionPayload;
+    }) => {
       if (msg?.type === "JD_UPDATED" && msg.payload) {
         setView((prev) => {
           // Only replace the view if we're in a state where a fresh JD is
           // meaningful — don't clobber in-flight analyze/generate flows.
-          if (
-            prev.kind === "authenticated-no-jd" ||
-            prev.kind === "jd-detected" ||
-            prev.kind === "loading"
-          ) {
-            return { kind: "jd-detected", jd: msg.payload! };
+          if (prev.kind === "authenticated-no-jd") {
+            return { kind: "jd-detected", profile: prev.profile, jd: msg.payload! };
+          }
+          if (prev.kind === "jd-detected") {
+            return { kind: "jd-detected", profile: prev.profile, jd: msg.payload! };
           }
           return prev;
         });
@@ -130,52 +159,57 @@ export default function App(): React.ReactElement {
     void sendBgMessage({ type: "OPEN_AUTH" });
   };
 
+  const onOpenProfileEditor = () => {
+    void chrome.tabs.create({ url: getProfileDeepLink() });
+  };
+
   const onAnalyze = async () => {
     if (view.kind !== "jd-detected") return;
-    const jd = view.jd;
-    setView({ kind: "analyzing", jd });
+    const { profile, jd } = view;
+    setView({ kind: "analyzing", profile, jd });
     setError(null);
     try {
-      const analysis = await analyzeJob({
-        jdText: jd.jdText,
-        jobTitle: jd.jobTitle,
-        company: jd.company,
-      });
-      setView({ kind: "results", jd, analysis });
+      const analysis = await analyzeJob({ jdText: jd.jdText });
+      setView({ kind: "results", profile, jd, analysis });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setView({ kind: "unauthenticated" });
         return;
       }
       setError(err instanceof Error ? err.message : "Analysis failed");
-      setView({ kind: "jd-detected", jd });
+      setView({ kind: "jd-detected", profile, jd });
     }
   };
 
   const onGenerate = async () => {
     if (view.kind !== "results") return;
-    const { jd, analysis } = view;
-    setView({ kind: "generating", jd, analysis });
+    const { profile, jd, analysis } = view;
+    setView({ kind: "generating", profile, jd, analysis });
     setError(null);
     try {
       const resume = await generateResume({
-        applicationId: analysis.applicationId,
+        applicationId: analysis.application_id,
       });
-      setView({ kind: "resume-ready", jd, analysis, resume });
+      setView({ kind: "resume-ready", profile, jd, analysis, resume });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setView({ kind: "unauthenticated" });
         return;
       }
       setError(err instanceof Error ? err.message : "Generation failed");
-      setView({ kind: "results", jd, analysis });
+      setView({ kind: "results", profile, jd, analysis });
     }
   };
 
   const onCopyResume = async () => {
     if (view.kind !== "resume-ready") return;
+    const markdown = view.resume.editorial_notes?.resume_content ?? "";
+    if (!markdown) {
+      setError("Resume content was empty");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(view.resume.resumeText);
+      await navigator.clipboard.writeText(markdown);
     } catch {
       setError("Unable to copy to clipboard");
     }
@@ -183,7 +217,7 @@ export default function App(): React.ReactElement {
 
   const onOpenInJobseek = () => {
     if (view.kind !== "resume-ready") return;
-    const url = getApplicationDeepLink(view.resume.applicationId);
+    const url = getApplicationDeepLink(view.analysis.application_id);
     void chrome.tabs.create({ url });
   };
 
@@ -231,6 +265,10 @@ export default function App(): React.ReactElement {
           <UnauthenticatedView onSignIn={onSignIn} />
         )}
 
+        {view.kind === "no-profile" && (
+          <NoProfileView onOpenProfile={onOpenProfileEditor} />
+        )}
+
         {view.kind === "authenticated-no-jd" && <NoJdView />}
 
         {view.kind === "jd-detected" && (
@@ -243,7 +281,6 @@ export default function App(): React.ReactElement {
 
         {view.kind === "results" && (
           <ResultsView
-            jd={view.jd}
             analysis={view.analysis}
             onGenerate={onGenerate}
           />
@@ -297,6 +334,31 @@ function UnauthenticatedView({
   );
 }
 
+function NoProfileView({
+  onOpenProfile,
+}: {
+  onOpenProfile: () => void;
+}): React.ReactElement {
+  return (
+    <div className="flex flex-col items-center gap-4 py-8 text-center">
+      <div className="text-2xl">📋</div>
+      <div>
+        <h2 className="text-sm font-bold">Add your profile first</h2>
+        <p className="mt-1 text-xs text-muted">
+          We need your experience, projects, and skills before we can
+          analyze a job posting or generate a tailored resume.
+        </p>
+      </div>
+      <Button onClick={onOpenProfile} className="mt-2 w-full">
+        Open profile on jobseek.fyi ↗
+      </Button>
+      <p className="text-[11px] text-muted">
+        Come back to this side panel once you&apos;ve added a few entries.
+      </p>
+    </div>
+  );
+}
+
 function NoJdView(): React.ReactElement {
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
@@ -304,7 +366,7 @@ function NoJdView(): React.ReactElement {
       <div>
         <h2 className="text-sm font-bold">Navigate to a job posting</h2>
         <p className="mt-1 text-xs text-muted">
-          Open any supported ATS and we'll detect the description
+          Open any supported ATS and we&apos;ll detect the description
           automatically.
         </p>
       </div>
@@ -355,14 +417,17 @@ function JdDetectedView({
 }
 
 function ResultsView({
-  jd,
   analysis,
   onGenerate,
 }: {
-  jd: JobDescriptionPayload;
   analysis: AnalyzeResponse;
   onGenerate: () => void;
 }): React.ReactElement {
+  // Show strongest themes first so the user sees wins before gaps.
+  const orderedThemes = [...analysis.themes].sort(
+    (a, b) => b.score_numeric - a.score_numeric,
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <Card className="text-center">
@@ -372,14 +437,14 @@ function ResultsView({
         <p
           className={cn(
             "mt-1 text-4xl font-bold tabular-nums",
-            scoreColor(analysis.overallFit),
+            scoreColor(analysis.fit_score),
           )}
         >
-          {Math.round(analysis.overallFit)}
+          {Math.round(analysis.fit_score)}
         </p>
         <p className="mt-0.5 text-xs text-muted">
-          {jd.jobTitle}
-          {jd.company ? ` · ${jd.company}` : ""}
+          {analysis.job_title}
+          {analysis.company_name ? ` · ${analysis.company_name}` : ""}
         </p>
       </Card>
 
@@ -387,23 +452,25 @@ function ResultsView({
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
           Themes
         </p>
-        {analysis.themes.map((t) => (
+        {orderedThemes.map((t) => (
           <div
             key={t.id}
-            className="flex items-center justify-between rounded-md border border-ink/10 bg-white/60 px-3 py-2"
+            className="rounded-md border border-ink/10 bg-white/60 px-3 py-2"
           >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{t.label}</p>
-              {t.evidence ? (
-                <p className="truncate text-[11px] text-muted">{t.evidence}</p>
-              ) : null}
+            <div className="flex items-center justify-between gap-3">
+              <p className="truncate text-sm font-semibold">{t.theme_name}</p>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xs font-semibold tabular-nums text-ink/70">
+                  {t.score_numeric}
+                </span>
+                <TierBadge tier={t.score_tier} />
+              </div>
             </div>
-            <div className="ml-3 flex shrink-0 items-center gap-2">
-              <span className="text-xs font-semibold tabular-nums text-ink/70">
-                {t.score_numeric}
-              </span>
-              <TierBadge tier={t.tier} />
-            </div>
+            {t.explanation ? (
+              <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-muted">
+                {t.explanation}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>
@@ -424,6 +491,7 @@ function ResumeReadyView({
   onCopy: () => void;
   onOpen: () => void;
 }): React.ReactElement {
+  const markdown = resume.editorial_notes?.resume_content ?? "";
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -431,12 +499,12 @@ function ResumeReadyView({
           Tailored Resume
         </p>
         <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-cream/60 p-3 text-[11px] leading-relaxed text-ink">
-          {resume.resumeText}
+          {markdown || "(Resume content unavailable — open in jobseek.fyi)"}
         </pre>
       </Card>
       <div className="flex flex-col gap-2">
-        <Button onClick={onCopy} className="w-full">
-          Copy to Clipboard
+        <Button onClick={onCopy} className="w-full" disabled={!markdown}>
+          Copy Markdown
         </Button>
         <Button variant="secondary" onClick={onOpen} className="w-full">
           Open in jobseek.fyi

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireAuthedUser } from "@/lib/api-auth";
 import {
   clampScore,
   normalizeAnalysisPayload,
@@ -11,13 +12,16 @@ import { matchNearestProfileChunkIds } from "@/lib/profile-chunk-retrieval";
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthedUser(request);
+    if (auth instanceof NextResponse) return auth;
+    const user_id = auth.userId;
+
     const body = await request.json();
     const jd_text = body.jd_text as string;
-    const user_id = body.user_id as string;
 
-    if (!jd_text || !user_id) {
+    if (!jd_text) {
       return NextResponse.json(
-        { error: "Missing jd_text or user_id" },
+        { error: "Missing jd_text" },
         { status: 400 }
       );
     }
@@ -230,10 +234,13 @@ Return ONLY valid JSON, no markdown fences.`,
 
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await requireAuthedUser(request);
+    if (auth instanceof NextResponse) return auth;
+    const patch_user_id = auth.userId;
+
     const patchBody = await request.json();
     const theme_id = patchBody.theme_id as string;
     const application_id = patchBody.application_id as string;
-    const patch_user_id = patchBody.user_id as string;
 
     const supabase = createServiceClient();
 
@@ -249,9 +256,16 @@ export async function PATCH(request: NextRequest) {
 
     const { data: app } = await supabase
       .from("applications")
-      .select("jd_text")
+      .select("jd_text, user_id")
       .eq("id", application_id)
       .single();
+
+    if (!app || app.user_id !== patch_user_id) {
+      return NextResponse.json(
+        { error: "Application not found" },
+        { status: 404 },
+      );
+    }
 
     const { data: patchChunks } = await supabase
       .from("profile_chunks")
