@@ -5,7 +5,7 @@ import type {
   ProfileResponse,
 } from "./types";
 
-const BASE_URL = "https://jobseek.fyi";
+const BASE_URL = "https://www.jobseek.fyi";
 
 export class ApiError extends Error {
   status: number;

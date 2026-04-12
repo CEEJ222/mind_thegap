@@ -8,6 +8,7 @@
   },
   "permissions": ["sidePanel", "storage", "activeTab", "scripting"],
   "host_permissions": [
+    "https://*.jobseek.fyi/*",
     "https://jobseek.fyi/*",
     "*://greenhouse.io/*",
     "*://boards.greenhouse.io/*",
@@ -35,7 +36,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://jobseek.fyi/*"],
+      "matches": ["https://*.jobseek.fyi/*", "https://jobseek.fyi/*"],
       "js": ["content/auth-bridge.js"],
       "run_at": "document_idle"
     }
@@ -46,6 +47,6 @@
     "128": "icons/icon128.png"
   },
   "externally_connectable": {
-    "matches": ["https://jobseek.fyi/*"]
+    "matches": ["https://*.jobseek.fyi/*", "https://jobseek.fyi/*"]
   }
 }
