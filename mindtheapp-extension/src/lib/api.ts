@@ -3,6 +3,7 @@ import type {
   AnalyzeResponse,
   GenerateResumeResponse,
   ProfileResponse,
+  SaveJobResponse,
 } from "./types";
 
 const BASE_URL = "https://www.jobseek.fyi";
@@ -86,6 +87,29 @@ export function getProfile(): Promise<ProfileResponse> {
   return authedFetch<ProfileResponse>("/api/profile", { method: "GET" });
 }
 
+export interface SaveJobInput {
+  url: string;
+  title?: string;
+  company?: string;
+  description?: string;
+  location?: string;
+  atsType?: string;
+}
+
+export function saveJob(input: SaveJobInput): Promise<SaveJobResponse> {
+  return authedFetch<SaveJobResponse>("/api/jobs/save", {
+    method: "POST",
+    body: JSON.stringify({
+      url: input.url,
+      title: input.title,
+      company: input.company,
+      description: input.description,
+      location: input.location,
+      ats_type: input.atsType,
+    }),
+  });
+}
+
 /** Deep link to an application detail page on jobseek.fyi. */
 export function getApplicationDeepLink(applicationId: string): string {
   return `${BASE_URL}/applications/${applicationId}`;
@@ -94,4 +118,9 @@ export function getApplicationDeepLink(applicationId: string): string {
 /** Deep link to the profile editor — used by the "Add your profile first" gate. */
 export function getProfileDeepLink(): string {
   return `${BASE_URL}/profile`;
+}
+
+/** Deep link to the saved-jobs list. */
+export function getSavedJobsDeepLink(): string {
+  return `${BASE_URL}/jobs/saved`;
 }
