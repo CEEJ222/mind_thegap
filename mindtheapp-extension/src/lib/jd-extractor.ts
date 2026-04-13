@@ -285,13 +285,29 @@ export function extractAppliedConfirmation(): AppliedDetectionPayload | null {
     url.includes("application-success") ||
     url.includes("applicationsuccess");
 
-  const bodyText = (document.body?.textContent ?? "").toLowerCase();
+  // Only look at the actively-rendered text so hidden/stale confirmation
+  // blocks from earlier in a SPA flow don't false-positive.
+  const bodyText = (document.body?.innerText ?? "").toLowerCase();
   const textLookedLikeConfirmation =
-    /thank\s+you\s+for\s+(your\s+application|applying)/.test(bodyText) ||
+    // "Thanks for applying" / "Thank you for applying" / "Thank you for your application"
+    /thank\s*(you|s)?\s+for\s+(your\s+)?(application|applying)/.test(bodyText) ||
+    // "We've received your application" / "We have received your application"
     /we[ '’]?ve\s+received\s+your\s+application/.test(bodyText) ||
     /we\s+have\s+received\s+your\s+application/.test(bodyText) ||
-    /your\s+application\s+(has\s+been\s+)?(received|submitted)/.test(bodyText) ||
-    /application\s+(has\s+been\s+)?(received|submitted|sent)/.test(bodyText);
+    // "Your application was successfully submitted" / "Your application has been submitted"
+    /your\s+application\s+(has\s+been\s+|was\s+(successfully\s+)?)?(received|submitted|sent)/.test(
+      bodyText,
+    ) ||
+    // "Application submitted" / "Application has been submitted" / "Application successfully sent"
+    /application\s+(has\s+been\s+|was\s+|successfully\s+)?(received|submitted|sent)/.test(
+      bodyText,
+    ) ||
+    // "Successfully submitted" / "Successfully applied" — common success-banner phrasing
+    /successfully\s+(submitted|applied|sent)/.test(bodyText) ||
+    // Ashby modal: "Congrats on applying!" / "Congratulations on applying"
+    /congrat(s|ulations)[\s!,]*on\s+applying/.test(bodyText) ||
+    // Greenhouse: "Thanks for your application to …"
+    /thanks\s+for\s+your\s+application/.test(bodyText);
 
   if (!urlLookedLikeConfirmation && !textLookedLikeConfirmation) return null;
 
@@ -320,6 +336,15 @@ export function extractAppliedConfirmation(): AppliedDetectionPayload | null {
       textFrom("[class*='company']") ||
       prettifySlug(pathParts[0] ?? ""),
   );
+
+  console.debug("[mindtheapp] applied confirmation detected", {
+    atsType,
+    jobUrl,
+    title,
+    company,
+    viaUrl: urlLookedLikeConfirmation,
+    viaText: textLookedLikeConfirmation,
+  });
 
   return {
     pageUrl: location.href,
