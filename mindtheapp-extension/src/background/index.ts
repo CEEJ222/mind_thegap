@@ -2,8 +2,10 @@ import { clearToken, storeToken } from "../lib/auth";
 import { markApplied, ApiError } from "../lib/api";
 import type {
   AppliedDetectionPayload,
+  ApplyFormSignal,
   ExtensionMessage,
   GetAuthStateResponse,
+  GetCurrentFormResponse,
   GetCurrentJdResponse,
   JobDescriptionPayload,
 } from "../lib/types";
@@ -17,6 +19,7 @@ const AUTH_URL = "https://www.jobseek.fyi/auth/login?extension=true";
  * waiting for another detection round-trip.
  */
 const latestJdByTab = new Map<number, JobDescriptionPayload>();
+const latestFormByTab = new Map<number, ApplyFormSignal>();
 /** Track which tab opened the auth flow so we can close it after success. */
 let authTabId: number | null = null;
 
@@ -122,15 +125,42 @@ async function handleAppliedDetected(
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   latestJdByTab.delete(tabId);
+  latestFormByTab.delete(tabId);
 });
 
-// Clear cached JD when a tab navigates away — the content script will
+// Clear cached JD/form when a tab navigates away — the content script will
 // repopulate it if the new page is a supported ATS.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading" && changeInfo.url) {
     latestJdByTab.delete(tabId);
+    latestFormByTab.delete(tabId);
   }
 });
+
+function handleFormDetected(
+  payload: ApplyFormSignal,
+  tabId: number | undefined,
+): void {
+  if (typeof tabId === "number") {
+    latestFormByTab.set(tabId, payload);
+  }
+  chrome.runtime
+    .sendMessage({ type: "FORM_UPDATED", payload })
+    .catch(() => {
+      /* side panel may not be open */
+    });
+}
+
+function handleFormCleared(tabId: number | undefined): void {
+  if (typeof tabId === "number") {
+    latestFormByTab.delete(tabId);
+  }
+  chrome.runtime
+    .sendMessage({ type: "FORM_CLEARED" })
+    .catch(() => {
+      /* side panel may not be open */
+    });
+}
 
 chrome.runtime.onMessage.addListener(
   (
@@ -165,6 +195,30 @@ chrome.runtime.onMessage.addListener(
         void handleAppliedDetected(msg.payload);
         sendResponse({ ok: true });
         return false;
+
+      case "APPLY_FORM_DETECTED":
+        handleFormDetected(msg.payload, sender.tab?.id);
+        sendResponse({ ok: true });
+        return false;
+
+      case "APPLY_FORM_CLEARED":
+        handleFormCleared(sender.tab?.id);
+        sendResponse({ ok: true });
+        return false;
+
+      case "GET_CURRENT_FORM": {
+        (async () => {
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          const form =
+            tab?.id != null ? latestFormByTab.get(tab.id) ?? null : null;
+          const resp: GetCurrentFormResponse = { form };
+          sendResponse(resp);
+        })();
+        return true;
+      }
 
       case "GET_CURRENT_JD": {
         (async () => {

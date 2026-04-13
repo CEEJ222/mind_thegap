@@ -78,6 +78,39 @@ export interface AppliedDetectionPayload {
   atsType?: AtsType;
 }
 
+/** Subset of user_settings the extension will spray onto apply-form
+ *  fields. Mirrors GET /api/apply/profile. */
+export interface AutofillProfile {
+  full_name: string | null;
+  preferred_name: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin_url: string | null;
+  github_url: string | null;
+  website_url: string | null;
+  location: string | null;
+  work_authorization: string | null;
+  requires_sponsorship: boolean | null;
+  open_to_relocation: boolean | null;
+}
+
+/** Result of a content-script autofill pass, returned to the side panel. */
+export interface AutofillResult {
+  filled: number;
+  skipped: number;
+  fields: Array<{ key: string; label: string; filled: boolean }>;
+}
+
+/** Sent by the content script when an apply-form is detected on the page.
+ *  Cached per-tab by the background so the side panel can decide whether
+ *  to surface the Autofill button. */
+export interface ApplyFormSignal {
+  pageUrl: string;
+  atsType: AtsType;
+  /** Rough candidate count — if it's 0 the side panel should NOT offer autofill. */
+  candidateCount: number;
+}
+
 /** Messages exchanged with the background service worker. */
 export type ExtensionMessage =
   | { type: "OPEN_AUTH" }
@@ -85,9 +118,18 @@ export type ExtensionMessage =
   | { type: "AUTH_SUCCESS"; token: string }
   | { type: "JD_DETECTED"; payload: JobDescriptionPayload }
   | { type: "APPLIED_DETECTED"; payload: AppliedDetectionPayload }
+  | { type: "APPLY_FORM_DETECTED"; payload: ApplyFormSignal }
+  | { type: "APPLY_FORM_CLEARED" }
   | { type: "GET_CURRENT_JD" }
+  | { type: "GET_CURRENT_FORM" }
   | { type: "GET_AUTH_STATE" }
   | { type: "SIGN_OUT" };
+
+/** Messages routed to the content script via chrome.tabs.sendMessage. */
+export type ContentScriptMessage = {
+  type: "AUTOFILL";
+  profile: AutofillProfile;
+};
 
 export interface GetCurrentJdResponse {
   jd: JobDescriptionPayload | null;
@@ -95,4 +137,8 @@ export interface GetCurrentJdResponse {
 
 export interface GetAuthStateResponse {
   authenticated: boolean;
+}
+
+export interface GetCurrentFormResponse {
+  form: ApplyFormSignal | null;
 }

@@ -1,6 +1,7 @@
 import { clearToken, getToken } from "./auth";
 import type {
   AnalyzeResponse,
+  AutofillProfile,
   GenerateResumeResponse,
   MarkAppliedResponse,
   ProfileResponse,
@@ -86,6 +87,10 @@ export function generateResume(
 
 export function getProfile(): Promise<ProfileResponse> {
   return authedFetch<ProfileResponse>("/api/profile", { method: "GET" });
+}
+
+export function getAutofillProfile(): Promise<AutofillProfile> {
+  return authedFetch<AutofillProfile>("/api/apply/profile", { method: "GET" });
 }
 
 export interface SaveJobInput {
@@ -202,4 +207,9 @@ export function getProfileDeepLink(): string {
 /** Deep link to the saved-jobs list. */
 export function getSavedJobsDeepLink(): string {
   return `${BASE_URL}/jobs/saved`;
+}
+
+/** Deep link to the settings page (autofill source of truth). */
+export function getSettingsDeepLink(): string {
+  return `${BASE_URL}/settings`;
 }

@@ -2,8 +2,11 @@ import {
   extractAppliedConfirmation,
   extractJobDescription,
 } from "../lib/jd-extractor";
+import { detectApplyForm, runAutofill } from "../lib/autofill";
 import type {
   AppliedDetectionPayload,
+  ApplyFormSignal,
+  ContentScriptMessage,
   ExtensionMessage,
   JobDescriptionPayload,
 } from "../lib/types";
@@ -278,6 +281,22 @@ function sendApplied(payload: AppliedDetectionPayload): void {
   });
 }
 
+function sendFormDetected(payload: ApplyFormSignal): void {
+  const msg: ExtensionMessage = { type: "APPLY_FORM_DETECTED", payload };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* service worker may be asleep */
+  });
+}
+
+function sendFormCleared(): void {
+  const msg: ExtensionMessage = { type: "APPLY_FORM_CLEARED" };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* service worker may be asleep */
+  });
+}
+
+let lastFormSignature = "";
+
 let lastSignature = "";
 /** URLs we've already reported as applied this tab session so we don't
  *  re-fire mark-applied on every MutationObserver tick. */
@@ -300,6 +319,26 @@ function detectAndReport(): void {
     return;
   }
 
+  // Check for apply forms in parallel with JD detection — many sites
+  // render the JD and the apply form together (Lever expands inline,
+  // Ashby opens the form modal). The side panel consumes this signal
+  // to decide whether to offer the "Autofill form" button.
+  const formInfo = detectApplyForm();
+  const formSignature = `${location.href}::${formInfo.candidateCount}`;
+  if (formInfo.candidateCount >= 2) {
+    if (formSignature !== lastFormSignature) {
+      lastFormSignature = formSignature;
+      sendFormDetected({
+        pageUrl: location.href,
+        atsType: "generic",
+        candidateCount: formInfo.candidateCount,
+      });
+    }
+  } else if (lastFormSignature) {
+    lastFormSignature = "";
+    sendFormCleared();
+  }
+
   const payload = extractJobDescription();
   if (!payload) {
     removeBadge();
@@ -315,6 +354,24 @@ function detectAndReport(): void {
   sendJd(payload);
   ensureBadge(payload);
 }
+
+// Listen for AUTOFILL requests from the side panel (routed via
+// chrome.tabs.sendMessage) and execute them against the current DOM.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const msg = message as ContentScriptMessage;
+  if (msg?.type !== "AUTOFILL") return false;
+  try {
+    const result = runAutofill(msg.profile);
+    sendResponse({ ok: true, result });
+  } catch (err) {
+    console.error("[mindtheapp] autofill failed", err);
+    sendResponse({
+      ok: false,
+      error: err instanceof Error ? err.message : "Autofill failed",
+    });
+  }
+  return false; // synchronous
+});
 
 // Run once on load and observe subsequent DOM/URL changes — SPAs like
 // LinkedIn and Ashby never trigger a full navigation.
