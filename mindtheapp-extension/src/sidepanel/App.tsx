@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TierBadge } from "@/components/ui/badge";
 import {
   analyzeJob,
   ApiError,
+  exportResumeDocx,
   generateResume,
   getApplicationDeepLink,
   getProfile,
@@ -342,6 +343,7 @@ export default function App(): React.ReactElement {
         {view.kind === "resume-ready" && (
           <ResumeReadyView
             resume={view.resume}
+            analysis={view.analysis}
             onCopy={() => void onCopyResume()}
             onOpen={onOpenInJobseek}
           />
@@ -593,14 +595,75 @@ function ResultsView({
 
 function ResumeReadyView({
   resume,
+  analysis,
   onCopy,
   onOpen,
 }: {
   resume: GenerateResumeResponse;
+  analysis: AnalyzeResponse;
   onCopy: () => void;
   onOpen: () => void;
 }): React.ReactElement {
   const markdown = resume.editorial_notes?.resume_content ?? "";
+  const filename = useMemo(() => {
+    const companyPart = analysis.company_name
+      ? analysis.company_name.replace(/\s+/g, "_")
+      : "Resume";
+    const titlePart = analysis.job_title
+      ? analysis.job_title.replace(/\s+/g, "_")
+      : "role";
+    return `${companyPart}_${titlePart}`;
+  }, [analysis.company_name, analysis.job_title]);
+
+  // Pre-fetch the DOCX once the resume is ready so Download + Drag are
+  // instant. Revoke the blob URL on unmount to free memory.
+  const [docx, setDocx] = useState<
+    | { status: "loading" }
+    | { status: "ready"; blob: Blob; url: string }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    if (!resume.file_path) {
+      setDocx({ status: "error", message: "No file path on resume" });
+      return;
+    }
+    let cancelled = false;
+    let createdUrl: string | null = null;
+    (async () => {
+      try {
+        const { blob } = await exportResumeDocx({
+          filePath: resume.file_path,
+          fileName: filename,
+        });
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        createdUrl = url;
+        setDocx({ status: "ready", blob, url });
+      } catch (err) {
+        if (cancelled) return;
+        setDocx({
+          status: "error",
+          message: err instanceof Error ? err.message : "Export failed",
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [resume.file_path, filename]);
+
+  const onDownload = () => {
+    if (docx.status !== "ready") return;
+    const a = document.createElement("a");
+    a.href = docx.url;
+    a.download = `${filename}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -608,16 +671,90 @@ function ResumeReadyView({
           Tailored Resume
         </p>
         <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-cream/60 p-3 text-[11px] leading-relaxed text-ink">
-          {markdown || "(Resume content unavailable — open in jobseek.fyi)"}
+          {markdown || "(Resume content unavailable — regenerate or open in jobseek.fyi)"}
         </pre>
       </Card>
+
+      {docx.status === "ready" && (
+        <DocxDragChip blob={docx.blob} filename={`${filename}.docx`} />
+      )}
+
       <div className="flex flex-col gap-2">
-        <Button onClick={onCopy} className="w-full" disabled={!markdown}>
+        <Button
+          onClick={onDownload}
+          className="w-full"
+          disabled={docx.status !== "ready"}
+        >
+          {docx.status === "loading"
+            ? "Preparing DOCX…"
+            : docx.status === "error"
+              ? "DOCX unavailable"
+              : "Download DOCX"}
+        </Button>
+        <Button onClick={onCopy} variant="secondary" className="w-full" disabled={!markdown}>
           Copy Markdown
         </Button>
-        <Button variant="secondary" onClick={onOpen} className="w-full">
+        <Button variant="ghost" onClick={onOpen} className="w-full">
           Open in jobseek.fyi
         </Button>
+      </div>
+
+      {docx.status === "error" && (
+        <p className="text-[11px] text-tier-none">{docx.message}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Draggable chip that initiates a File-typed HTML5 drag. Dragging onto an
+ * ATS file-upload input (most React forms listen for the `drop` event on
+ * input[type=file]) attaches the DOCX directly without hitting the
+ * filesystem.
+ */
+function DocxDragChip({
+  blob,
+  filename,
+}: {
+  blob: Blob;
+  filename: string;
+}): React.ReactElement {
+  const onDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    const file = new File([blob], filename, {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    try {
+      e.dataTransfer.items.add(file);
+    } catch {
+      /* some browsers restrict items.add cross-origin; ignore */
+    }
+    // Also set DownloadURL so dragging onto the desktop still produces a file.
+    e.dataTransfer.setData(
+      "DownloadURL",
+      `${file.type}:${filename}:${URL.createObjectURL(blob)}`,
+    );
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="group flex cursor-grab items-center gap-3 rounded-md border border-turquoise/40 bg-turquoise/10 px-3 py-2 active:cursor-grabbing"
+      role="button"
+      aria-label="Drag resume to upload field"
+      title="Drag onto an upload field or the desktop"
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-turquoise text-ink">
+        <span className="text-[10px] font-bold">DOCX</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-semibold text-ink">
+          {filename}
+        </p>
+        <p className="text-[11px] text-muted">
+          Drag onto an upload field →
+        </p>
       </div>
     </div>
   );
