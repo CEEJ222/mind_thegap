@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireAuthedUser } from "@/lib/api-auth";
 import {
   Document,
   Packer,
@@ -235,6 +236,10 @@ function parseBoldText(text: string): TextRun[] {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthedUser(request);
+    if (auth instanceof NextResponse) return auth;
+    const userId = auth.userId;
+
     const body = await request.json();
     const file_path = body.file_path as string;
     const format = (body.format as string) || "docx";
@@ -246,20 +251,27 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Try getting resume content from the database first
+    // Ownership check — fetch the resume row scoped to the authed user so a
+    // caller can't download another user's resume by passing their file_path.
     let markdownContent = "";
 
     const { data: resumeRecords } = await supabase
       .from("generated_resumes")
-      .select("editorial_notes")
+      .select("editorial_notes, user_id")
       .eq("file_path", file_path)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1);
 
     const resumeRecord = resumeRecords?.[0];
+    if (!resumeRecord) {
+      // Either the file_path doesn't exist or it belongs to another user.
+      // Same response either way to avoid leaking existence.
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
 
     // editorial_notes may come back as a string or object
-    let notes = resumeRecord?.editorial_notes;
+    let notes = resumeRecord.editorial_notes;
     if (typeof notes === "string") {
       try { notes = JSON.parse(notes); } catch { notes = null; }
     }
@@ -267,7 +279,7 @@ export async function POST(request: NextRequest) {
     if (notes?.resume_content) {
       markdownContent = notes.resume_content;
     } else {
-      // Fallback: try downloading from storage
+      // Fallback: download the markdown from storage.
       const { data: fileData, error } = await supabase.storage
         .from("resumes")
         .download(file_path);
