@@ -58,7 +58,7 @@ function prettifySlug(slug: string): string {
 function pickLargestTextBlock(root: ParentNode = document): Element | null {
   const candidates = Array.from(
     root.querySelectorAll(
-      "main, article, section, [role='main'], div[class*='content'], div[class*='description'], div[class*='body']",
+      "main, article, section, [role='main'], [role='tabpanel'], div[class*='content'], div[class*='description'], div[class*='body']",
     ),
   );
   // Also scan all divs as a last resort — but cap to avoid O(n²) on giant DOMs.
@@ -67,18 +67,42 @@ function pickLargestTextBlock(root: ParentNode = document): Element | null {
     candidates.push(...divs);
   }
 
+  const bodyLen = document.body?.textContent?.length ?? Infinity;
   let best: { el: Element; length: number } | null = null;
   for (const el of candidates) {
+    // Skip invisible/off-screen panels — tabpanels for the inactive tab
+    // (e.g. Ashby's "Application" panel while user is on "Overview")
+    // would otherwise swallow the pick.
+    if (!isElementVisible(el)) continue;
     const text = (el.textContent ?? "").trim();
     const len = text.length;
     if (len < 400) continue;
     // Reject elements that contain ~the entire document — those are the
     // <body> or top-level wrappers, not the JD body.
-    const bodyLen = document.body?.textContent?.length ?? Infinity;
     if (len > bodyLen * 0.95) continue;
     if (!best || len > best.length) best = { el, length: len };
   }
   return best?.el ?? null;
+}
+
+function isElementVisible(el: Element): boolean {
+  if (!(el instanceof HTMLElement)) return true;
+  // Fast path: offsetParent is null for display:none / visibility:hidden
+  // / elements detached from the render tree. Not reliable for fixed-pos
+  // elements but good enough for our use case.
+  if (el.offsetParent === null) {
+    const style = window.getComputedStyle(el);
+    if (style.display === "none") return false;
+    if (style.visibility === "hidden") return false;
+    if (style.opacity === "0") return false;
+    // Fixed-position elements still report null offsetParent but can be
+    // visible — check for any rendered box.
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+  }
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return false;
+  return true;
 }
 
 function extractGreenhouse(): ExtractedJob | null {
@@ -169,23 +193,23 @@ function extractLever(): ExtractedJob | null {
 }
 
 function extractAshby(): ExtractedJob | null {
-  // Modern Ashby uses dynamic CSS-in-JS class names, an Overview/Application
-  // tab pattern (app.ashbyhq.com/{company}/{slug}), and renders the JD body
-  // inside the active tab panel. Try a cascade of selectors, falling back
-  // to the largest text block on the page.
+  // Modern Ashby uses dynamic CSS-in-JS class names and an Overview /
+  // Application tab pattern. The "Application" tabpanel is often present
+  // in the DOM alongside "Overview" — picking it up by role='tabpanel'
+  // or <main> gives us the wrong (empty or very short) panel.
+  //
+  // Strategy: try a couple of known class-name patterns that have held up
+  // historically, then fall straight to pickLargestTextBlock (which
+  // compares text lengths and naturally selects the visible Overview
+  // tabpanel over an empty sibling).
   const container =
     document.querySelector("[class*='_jobPostingBody']") ??
     document.querySelector("[class*='jobDescription']") ??
     document.querySelector("[class*='_descriptionContainer']") ??
-    document.querySelector("[class*='_description_']") ??
-    document.querySelector("[data-testid*='description']") ??
-    document.querySelector("[role='tabpanel']") ??
-    document.querySelector("main") ??
     pickLargestTextBlock();
   if (!container) return null;
 
   const jdText = normalizeText(container.textContent ?? "");
-  // Lower the floor slightly — Ashby JDs occasionally come in short.
   if (jdText.length < 200) return null;
 
   // Title: prefer h1; fall back to page title minus the company suffix.
