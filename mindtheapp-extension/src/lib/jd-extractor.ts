@@ -14,6 +14,15 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Strip trailing " logo" / " icon" from company names read from img[alt]
+ *  so the badge doesn't end up saying "Machina Labs logo · Click to analyze". */
+function cleanCompanyName(name: string): string {
+  return name
+    .replace(/\s*(logo|icon|mark|wordmark)\s*$/i, "")
+    .replace(/^\s*logo\s*/i, "")
+    .trim();
+}
+
 function textFrom(selector: string, root: ParentNode = document): string {
   const el = root.querySelector(selector);
   return el ? normalizeText(el.textContent ?? "") : "";
@@ -108,29 +117,51 @@ function extractGreenhouse(): ExtractedJob | null {
 
   const pathParts = location.pathname.split("/").filter(Boolean);
   const companyFromPath = prettifySlug(pathParts[0] ?? "");
-  const company =
-    // Prefer a visible company header if present.
+  const company = cleanCompanyName(
     textFrom("header h2") ||
-    textFrom("[class*='company']") ||
-    companyFromPath;
+      textFrom("[class*='company']") ||
+      companyFromPath,
+  );
 
   return { jdText, jobTitle, company };
 }
 
 function extractLever(): ExtractedJob | null {
+  // The headline card holds the title + location + team metadata. That's
+  // what the previous implementation was capturing — ~60 chars of useless
+  // "Senior Product Manager Chatsworth, CA Product / Full-time / On-site".
   const headline = document.querySelector(".posting-headline");
-  const body = document.querySelector(".section-wrapper");
-  if (!headline && !body) return null;
+
+  // The actual JD body lives in `.section-page-centered` / `.content` /
+  // the collection of `.section` blocks that follow the headline on a
+  // modern Lever posting. Collect all of them and concatenate their text.
+  const bodyEls = Array.from(
+    document.querySelectorAll(
+      ".posting .section, .posting-page .section, .content .section, .content-wrapper .section",
+    ),
+  );
+  let body = bodyEls.map((el) => el.textContent ?? "").join("\n");
+
+  // Fallback: pickLargestTextBlock if the `.section` selectors missed
+  // (Lever has a few layout variants).
+  if (body.trim().length < 200) {
+    const largest = pickLargestTextBlock();
+    body = largest?.textContent ?? "";
+  }
 
   const jdText = normalizeText(
-    [headline?.textContent ?? "", body?.textContent ?? ""].join("\n"),
+    [headline?.textContent ?? "", body].join("\n"),
   );
-  if (jdText.length < 50) return null;
+  if (jdText.length < 200) return null;
 
   const jobTitle = textFrom(".posting-headline h2") || textFrom("h2") || "";
+
+  // Alt text often ships as "Acme Inc. logo" — strip the suffix.
+  const logoAlt =
+    document.querySelector<HTMLImageElement>(".main-header-logo img")?.alt ??
+    "";
   const company =
-    textFrom(".main-header-logo img[alt]") ||
-    document.querySelector<HTMLImageElement>(".main-header-logo img")?.alt ||
+    cleanCompanyName(logoAlt) ||
     // Lever pages are at jobs.lever.co/{company}/...
     prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? "");
 
@@ -152,9 +183,10 @@ function extractAshby(): ExtractedJob | null {
   return {
     jdText,
     jobTitle: textFrom("h1") || document.title,
-    company:
+    company: cleanCompanyName(
       textFrom("[class*='_companyName']") ||
-      prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? ""),
+        prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? ""),
+    ),
   };
 }
 
@@ -242,10 +274,11 @@ export function extractAppliedConfirmation(): AppliedDetectionPayload | null {
   const title =
     textFrom("h1") || (document.title.split(" - ")[0] ?? "").trim() || "";
   const pathParts = location.pathname.split("/").filter(Boolean);
-  const company =
+  const company = cleanCompanyName(
     textFrom("header h2") ||
-    textFrom("[class*='company']") ||
-    prettifySlug(pathParts[0] ?? "");
+      textFrom("[class*='company']") ||
+      prettifySlug(pathParts[0] ?? ""),
+  );
 
   return {
     pageUrl: location.href,

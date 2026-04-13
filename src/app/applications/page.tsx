@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
 import { Briefcase, Send, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -19,6 +19,7 @@ const ATS_TYPES = new Set(['lever', 'greenhouse', 'ashby'])
 export default function ApplicationsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -39,6 +40,14 @@ export default function ApplicationsPage() {
   useEffect(() => {
     loadApplications();
   }, [loadApplications]);
+
+  // Deep-linked selection — /applications?id={uuid} opens straight into that
+  // application's detail view. Used by the Mind the App Chrome extension
+  // ("Open in jobseek.fyi" from the resume-ready side panel).
+  useEffect(() => {
+    const id = searchParams.get("id");
+    if (id) setSelectedId(id);
+  }, [searchParams]);
 
   async function handleStatusChange(appId: string, status: InterviewStatus) {
     await supabase
