@@ -696,14 +696,39 @@ function ResumeReadyView({
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
-          Tailored Resume
-        </p>
-        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-panel-border bg-panel-bg p-3 text-[11px] leading-relaxed text-panel-text">
-          {markdown || "(Resume content unavailable — regenerate or open in jobseek.fyi)"}
-        </pre>
-      </Card>
+      {markdown ? (
+        <Card>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
+              Tailored Resume
+            </p>
+            <button
+              type="button"
+              onClick={onOpen}
+              className="text-[11px] font-semibold text-turquoise underline-offset-2 hover:underline"
+            >
+              Full preview →
+            </button>
+          </div>
+          <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-panel-border bg-panel-bg p-3 text-[11px] leading-relaxed text-panel-text">
+            {markdown}
+          </pre>
+        </Card>
+      ) : (
+        <Card>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
+            Tailored Resume
+          </p>
+          <p className="mt-2 text-xs text-panel-text-muted">
+            Preview your resume on jobseek.fyi — or download the DOCX below.
+          </p>
+          <div className="mt-3">
+            <Button onClick={onOpen} variant="secondary" className="w-full">
+              Preview on jobseek.fyi ↗
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {docx.status === "ready" && (
         <DocxDragChip blob={docx.blob} filename={`${filename}.docx`} />
@@ -721,12 +746,16 @@ function ResumeReadyView({
               ? "DOCX unavailable"
               : "Download DOCX"}
         </Button>
-        <Button onClick={onCopy} variant="secondary" className="w-full" disabled={!markdown}>
-          Copy Markdown
-        </Button>
-        <Button variant="ghost" onClick={onOpen} className="w-full">
-          Open in jobseek.fyi
-        </Button>
+        {markdown ? (
+          <Button onClick={onCopy} variant="secondary" className="w-full">
+            Copy Markdown
+          </Button>
+        ) : null}
+        {markdown ? (
+          <Button variant="ghost" onClick={onOpen} className="w-full">
+            View application in jobseek.fyi
+          </Button>
+        ) : null}
       </div>
 
       {docx.status === "error" && (

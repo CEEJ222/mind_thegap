@@ -189,9 +189,9 @@ export async function exportResumeDocx(
   };
 }
 
-/** Deep link to an application detail page on jobseek.fyi. */
+/** Deep link to the applications page with a specific one pre-selected. */
 export function getApplicationDeepLink(applicationId: string): string {
-  return `${BASE_URL}/applications/${applicationId}`;
+  return `${BASE_URL}/applications?id=${encodeURIComponent(applicationId)}`;
 }
 
 /** Deep link to the profile editor — used by the "Add your profile first" gate. */

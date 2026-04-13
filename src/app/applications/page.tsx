@@ -10,7 +10,7 @@ import { cn, getFitScoreColor } from "@/lib/utils";
 import { ApplicationDetail } from "@/components/applications/application-detail";
 import { GeneratedResumesPanel } from "@/components/applications/generated-resumes-panel";
 import { Briefcase, Send, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
@@ -20,6 +20,7 @@ const ATS_TYPES = new Set(["lever", "greenhouse", "ashby"]);
 export default function ApplicationsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -41,16 +42,23 @@ export default function ApplicationsPage() {
     loadApplications();
   }, [loadApplications]);
 
+  // Deep-linked selection — /applications?id={uuid} opens that application when
+  // valid (Chrome extension "Open in jobseek.fyi"). Otherwise default to first.
   useEffect(() => {
     if (applications.length === 0) {
       setSelectedId(null);
+      return;
+    }
+    const idFromUrl = searchParams.get("id");
+    if (idFromUrl && applications.some((a) => a.id === idFromUrl)) {
+      setSelectedId(idFromUrl);
       return;
     }
     setSelectedId((prev) => {
       if (prev && applications.some((a) => a.id === prev)) return prev;
       return applications[0].id;
     });
-  }, [applications]);
+  }, [applications, searchParams]);
 
   async function handleStatusChange(appId: string, status: InterviewStatus) {
     await supabase
