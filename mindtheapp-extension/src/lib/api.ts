@@ -2,6 +2,7 @@ import { clearToken, getToken } from "./auth";
 import type {
   AnalyzeResponse,
   GenerateResumeResponse,
+  MarkAppliedResponse,
   ProfileResponse,
   SaveJobResponse,
 } from "./types";
@@ -105,6 +106,27 @@ export function saveJob(input: SaveJobInput): Promise<SaveJobResponse> {
       company: input.company,
       description: input.description,
       location: input.location,
+      ats_type: input.atsType,
+    }),
+  });
+}
+
+export interface MarkAppliedInput {
+  url: string;
+  title?: string;
+  company?: string;
+  atsType?: string;
+}
+
+export function markApplied(
+  input: MarkAppliedInput,
+): Promise<MarkAppliedResponse> {
+  return authedFetch<MarkAppliedResponse>("/api/jobs/mark-applied", {
+    method: "POST",
+    body: JSON.stringify({
+      url: input.url,
+      title: input.title,
+      company: input.company,
       ats_type: input.atsType,
     }),
   });

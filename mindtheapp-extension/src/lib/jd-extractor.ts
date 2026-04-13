@@ -1,4 +1,8 @@
-import type { AtsType, JobDescriptionPayload } from "./types";
+import type {
+  AppliedDetectionPayload,
+  AtsType,
+  JobDescriptionPayload,
+} from "./types";
 
 interface ExtractedJob {
   jdText: string;
@@ -188,6 +192,67 @@ function extractGeneric(): ExtractedJob | null {
     jdText,
     jobTitle: textFrom("h1") || document.title,
     company: "",
+  };
+}
+
+/**
+ * Detect whether the current page is a post-apply confirmation page.
+ * Checks URL path tokens and visible body text. Returns a payload with
+ * a best-effort job URL (stripping /apply, /thanks, etc. from the path)
+ * so the backend can match the same job_id the user just analyzed/saved.
+ */
+export function extractAppliedConfirmation(): AppliedDetectionPayload | null {
+  const url = location.href.toLowerCase();
+  const path = location.pathname.toLowerCase();
+  const urlLookedLikeConfirmation =
+    /\/(thanks|thank_?you|thank-you|confirmation|submitted|success|complete|applied)(\/|$)/.test(
+      path,
+    ) ||
+    url.includes("application_success") ||
+    url.includes("application-success") ||
+    url.includes("applicationsuccess");
+
+  const bodyText = (document.body?.textContent ?? "").toLowerCase();
+  const textLookedLikeConfirmation =
+    /thank\s+you\s+for\s+(your\s+application|applying)/.test(bodyText) ||
+    /we[ '’]?ve\s+received\s+your\s+application/.test(bodyText) ||
+    /we\s+have\s+received\s+your\s+application/.test(bodyText) ||
+    /your\s+application\s+(has\s+been\s+)?(received|submitted)/.test(bodyText) ||
+    /application\s+(has\s+been\s+)?(received|submitted|sent)/.test(bodyText);
+
+  if (!urlLookedLikeConfirmation && !textLookedLikeConfirmation) return null;
+
+  // Derive the canonical job URL by stripping trailing confirmation segments.
+  let jobUrl = location.href;
+  try {
+    const u = new URL(location.href);
+    u.pathname = u.pathname
+      .replace(
+        /\/(apply|thanks|thank_?you|thank-you|confirmation|submitted|success|complete|applied)\/?$/i,
+        "",
+      )
+      // Lever: /{company}/{id}/apply/thanks
+      .replace(/\/apply\/thanks\/?$/i, "");
+    jobUrl = u.toString();
+  } catch {
+    /* ignore — fall back to current href */
+  }
+
+  const atsType = detectAts(location.hostname);
+  const title =
+    textFrom("h1") || (document.title.split(" - ")[0] ?? "").trim() || "";
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const company =
+    textFrom("header h2") ||
+    textFrom("[class*='company']") ||
+    prettifySlug(pathParts[0] ?? "");
+
+  return {
+    pageUrl: location.href,
+    jobUrl,
+    title: title || undefined,
+    company: company || undefined,
+    atsType,
   };
 }
 

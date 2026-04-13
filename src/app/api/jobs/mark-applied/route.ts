@@ -4,25 +4,24 @@ import { requireAuthedUser } from "@/lib/api-auth";
 import { extensionJobId } from "@/lib/jobs-url";
 
 /**
- * POST /api/jobs/save
+ * POST /api/jobs/mark-applied
  *
- * Save a job posting the user found off-platform (e.g. via the Mind the App
- * Chrome extension on Greenhouse / Lever / Ashby). Upserts into the global
- * `jobs` table keyed by a URL-derived stable ID, then upserts the per-user
- * row in `user_jobs` with status='saved'.
+ * Fired by the Mind the App Chrome extension when it detects an ATS
+ * confirmation page ("thank you for applying" / submission success).
+ * Flips the `user_jobs.status` for the corresponding job to `'applied'`.
+ * Creates the jobs row and user_jobs row if they don't exist yet (some
+ * users skip "Save for later" and go straight to apply).
  *
  * Body:
  *   {
- *     url: string,               // apply URL (required)
- *     title?: string,            // role title
- *     company?: string,          // company name
- *     description?: string,      // full JD text (raw, already normalized)
- *     location?: string,         // "Culver City, CA" etc
- *     ats_type?: "greenhouse" | "lever" | "ashby" | "linkedin" | "generic"
+ *     url: string,              // canonical job URL (required)
+ *     title?: string,
+ *     company?: string,
+ *     ats_type?: string
  *   }
  *
  * Response:
- *   { job_id, status: "saved", created: boolean }
+ *   { job_id, status: "applied", previous_status: string | null }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -41,12 +40,9 @@ export async function POST(request: NextRequest) {
 
     const title = stringOrNull(body.title);
     const company = stringOrNull(body.company);
-    const description = stringOrNull(body.description);
-    const location = stringOrNull(body.location);
     const atsType = stringOrNull(body.ats_type);
 
     const supabase = createServiceClient();
-
     const jobId = extensionJobId(url);
 
     const jobRow: Record<string, unknown> = {
@@ -55,28 +51,37 @@ export async function POST(request: NextRequest) {
     };
     if (title) jobRow.title = title;
     if (company) jobRow.company_name = company;
-    if (description) jobRow.description_text = description;
-    if (location) jobRow.location = location;
     if (atsType) jobRow.raw_data = { ats_type: atsType, source: "extension" };
 
     const { error: jobError } = await supabase
       .from("jobs")
       .upsert(jobRow, { onConflict: "id" });
     if (jobError) {
-      console.error("[jobs/save] jobs upsert failed:", jobError);
+      console.error("[jobs/mark-applied] jobs upsert failed:", jobError);
       return NextResponse.json(
-        { error: "Could not save job", code: "DB_ERROR" },
+        { error: "Could not mark applied", code: "DB_ERROR" },
         { status: 500 },
       );
     }
 
-    // Track whether this was a fresh save vs. re-save for UI copy.
-    const { data: existingUserJob } = await supabase
+    const { data: existing } = await supabase
       .from("user_jobs")
-      .select("id, status")
+      .select("status")
       .eq("user_id", userId)
       .eq("job_id", jobId)
       .maybeSingle();
+
+    const previousStatus = existing?.status ?? null;
+
+    // Only forward-progress: don't downgrade an already-applied row or
+    // overwrite a `dismissed` status silently.
+    if (previousStatus === "applied") {
+      return NextResponse.json({
+        job_id: jobId,
+        status: "applied",
+        previous_status: previousStatus,
+      });
+    }
 
     const { error: userJobError } = await supabase
       .from("user_jobs")
@@ -84,25 +89,28 @@ export async function POST(request: NextRequest) {
         {
           user_id: userId,
           job_id: jobId,
-          status: "saved",
+          status: "applied",
         },
         { onConflict: "user_id,job_id" },
       );
     if (userJobError) {
-      console.error("[jobs/save] user_jobs upsert failed:", userJobError);
+      console.error(
+        "[jobs/mark-applied] user_jobs upsert failed:",
+        userJobError,
+      );
       return NextResponse.json(
-        { error: "Could not save job", code: "DB_ERROR" },
+        { error: "Could not mark applied", code: "DB_ERROR" },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
       job_id: jobId,
-      status: "saved",
-      created: !existingUserJob,
+      status: "applied",
+      previous_status: previousStatus,
     });
   } catch (err) {
-    console.error("[jobs/save] unhandled:", err);
+    console.error("[jobs/mark-applied] unhandled:", err);
     return NextResponse.json(
       { error: "Internal error", code: "INTERNAL" },
       { status: 500 },

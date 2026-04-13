@@ -1,5 +1,12 @@
-import { extractJobDescription } from "../lib/jd-extractor";
-import type { ExtensionMessage, JobDescriptionPayload } from "../lib/types";
+import {
+  extractAppliedConfirmation,
+  extractJobDescription,
+} from "../lib/jd-extractor";
+import type {
+  AppliedDetectionPayload,
+  ExtensionMessage,
+  JobDescriptionPayload,
+} from "../lib/types";
 
 console.debug("[mindtheapp] content script loaded on", location.href);
 
@@ -264,9 +271,35 @@ function sendJd(payload: JobDescriptionPayload): void {
   });
 }
 
+function sendApplied(payload: AppliedDetectionPayload): void {
+  const msg: ExtensionMessage = { type: "APPLIED_DETECTED", payload };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* service worker may be asleep */
+  });
+}
+
 let lastSignature = "";
+/** URLs we've already reported as applied this tab session so we don't
+ *  re-fire mark-applied on every MutationObserver tick. */
+const appliedReported = new Set<string>();
 
 function detectAndReport(): void {
+  // Confirmation pages hijack the DOM with "Thank you for applying" copy.
+  // Detect those first so we don't mis-extract the confirmation text as a
+  // new JD (which would clobber the real JD in the side panel).
+  const applied = extractAppliedConfirmation();
+  if (applied) {
+    if (!appliedReported.has(applied.jobUrl)) {
+      appliedReported.add(applied.jobUrl);
+      sendApplied(applied);
+      console.debug("[mindtheapp] applied detected", applied);
+    }
+    // Don't run JD extraction or change the badge state on confirmation
+    // pages — the badge will be updated by the background/side panel
+    // response with an "Applied" indicator when the API call succeeds.
+    return;
+  }
+
   const payload = extractJobDescription();
   if (!payload) {
     removeBadge();
