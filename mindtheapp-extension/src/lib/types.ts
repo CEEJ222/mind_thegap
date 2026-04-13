@@ -53,6 +53,14 @@ export interface ProfileResponse {
   profile_chunk_count: number;
 }
 
+/** Response body of POST /api/jobs/save. */
+export interface SaveJobResponse {
+  job_id: string;
+  status: "saved";
+  /** True if this was the first save; false for re-saves. */
+  created: boolean;
+}
+
 /** Messages exchanged with the background service worker. */
 export type ExtensionMessage =
   | { type: "OPEN_AUTH" }

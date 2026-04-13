@@ -9,6 +9,8 @@ import {
   getApplicationDeepLink,
   getProfile,
   getProfileDeepLink,
+  getSavedJobsDeepLink,
+  saveJob,
 } from "@/lib/api";
 import type {
   AnalyzeResponse,
@@ -76,9 +78,16 @@ function sendBgMessage<T = unknown>(message: unknown): Promise<T> {
   });
 }
 
+type SaveState =
+  | { kind: "idle" }
+  | { kind: "saving" }
+  | { kind: "saved"; created: boolean }
+  | { kind: "error"; message: string };
+
 export default function App(): React.ReactElement {
   const [view, setView] = useState<View>({ kind: "loading" });
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
 
   const hydrate = useCallback(async () => {
     setError(null);
@@ -141,6 +150,11 @@ export default function App(): React.ReactElement {
             return { kind: "jd-detected", profile: prev.profile, jd: msg.payload! };
           }
           if (prev.kind === "jd-detected") {
+            // New JD detected on the same tab — reset the save state so the
+            // button shows "Save for later" again for the new posting.
+            if (prev.jd.pageUrl !== msg.payload!.pageUrl) {
+              setSaveState({ kind: "idle" });
+            }
             return { kind: "jd-detected", profile: prev.profile, jd: msg.payload! };
           }
           return prev;
@@ -161,6 +175,35 @@ export default function App(): React.ReactElement {
 
   const onOpenProfileEditor = () => {
     void chrome.tabs.create({ url: getProfileDeepLink() });
+  };
+
+  const onSaveJob = async () => {
+    if (view.kind !== "jd-detected") return;
+    const jd = view.jd;
+    setSaveState({ kind: "saving" });
+    try {
+      const resp = await saveJob({
+        url: jd.pageUrl,
+        title: jd.jobTitle,
+        company: jd.company,
+        description: jd.jdText,
+        atsType: jd.atsType,
+      });
+      setSaveState({ kind: "saved", created: resp.created });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setView({ kind: "unauthenticated" });
+        return;
+      }
+      setSaveState({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Could not save job",
+      });
+    }
+  };
+
+  const onOpenSavedJobs = () => {
+    void chrome.tabs.create({ url: getSavedJobsDeepLink() });
   };
 
   const onAnalyze = async () => {
@@ -272,7 +315,13 @@ export default function App(): React.ReactElement {
         {view.kind === "authenticated-no-jd" && <NoJdView />}
 
         {view.kind === "jd-detected" && (
-          <JdDetectedView jd={view.jd} onAnalyze={onAnalyze} />
+          <JdDetectedView
+            jd={view.jd}
+            saveState={saveState}
+            onAnalyze={onAnalyze}
+            onSave={() => void onSaveJob()}
+            onOpenSavedJobs={onOpenSavedJobs}
+          />
         )}
 
         {view.kind === "analyzing" && (
@@ -387,10 +436,16 @@ function NoJdView(): React.ReactElement {
 
 function JdDetectedView({
   jd,
+  saveState,
   onAnalyze,
+  onSave,
+  onOpenSavedJobs,
 }: {
   jd: JobDescriptionPayload;
+  saveState: SaveState;
   onAnalyze: () => void;
+  onSave: () => void;
+  onOpenSavedJobs: () => void;
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
@@ -412,7 +467,61 @@ function JdDetectedView({
       <Button onClick={onAnalyze} className="w-full" size="lg">
         Analyze This Job
       </Button>
+      <SaveJobButton
+        saveState={saveState}
+        onSave={onSave}
+        onOpenSavedJobs={onOpenSavedJobs}
+      />
     </div>
+  );
+}
+
+function SaveJobButton({
+  saveState,
+  onSave,
+  onOpenSavedJobs,
+}: {
+  saveState: SaveState;
+  onSave: () => void;
+  onOpenSavedJobs: () => void;
+}): React.ReactElement {
+  if (saveState.kind === "saved") {
+    return (
+      <div className="flex items-center justify-between rounded-md border border-tier-strong/30 bg-tier-strong/10 px-3 py-2 text-xs">
+        <span className="font-semibold text-tier-strong">
+          ✓ {saveState.created ? "Saved to jobseek.fyi" : "Already saved"}
+        </span>
+        <button
+          type="button"
+          onClick={onOpenSavedJobs}
+          className="text-tier-strong underline-offset-2 hover:underline"
+        >
+          View all →
+        </button>
+      </div>
+    );
+  }
+
+  if (saveState.kind === "error") {
+    return (
+      <div className="flex flex-col gap-2">
+        <Button variant="secondary" onClick={onSave} className="w-full">
+          Try saving again
+        </Button>
+        <p className="text-[11px] text-tier-none">{saveState.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="secondary"
+      onClick={onSave}
+      className="w-full"
+      disabled={saveState.kind === "saving"}
+    >
+      {saveState.kind === "saving" ? "Saving…" : "Save for later"}
+    </Button>
   );
 }
 
