@@ -153,6 +153,38 @@ export default function App(): React.ReactElement {
     }
   }, []);
 
+  /**
+   * Lighter-weight refresh used when the user just switched tabs. We
+   * pull the cached JD + form for the now-active tab but PRESERVE
+   * in-flight states (analyzing/generating) and the results/resume-ready
+   * views — the user may have been mid-flow on tab A, popped over to
+   * tab B, and we don't want to nuke their analysis just because they
+   * looked at a calendar.
+   */
+  const refreshForActiveTab = useCallback(async () => {
+    const [jdResp, formResp] = await Promise.all([
+      sendBgMessage<GetCurrentJdResponse>({ type: "GET_CURRENT_JD" }),
+      sendBgMessage<GetCurrentFormResponse>({ type: "GET_CURRENT_FORM" }),
+    ]);
+    setForm(formResp?.form ?? null);
+    setSaveState((prev) => (prev.kind === "applied" ? prev : { kind: "idle" }));
+    setAutofill({ kind: "idle" });
+    setView((prev) => {
+      // Only views that represent "what's on the current tab right now"
+      // are safe to overwrite. Mid-flight states stay put.
+      if (
+        prev.kind === "authenticated-no-jd" ||
+        prev.kind === "jd-detected"
+      ) {
+        if (jdResp?.jd) {
+          return { kind: "jd-detected", profile: prev.profile, jd: jdResp.jd };
+        }
+        return { kind: "authenticated-no-jd", profile: prev.profile };
+      }
+      return prev;
+    });
+  }, []);
+
   useEffect(() => {
     void hydrate();
 
@@ -205,8 +237,32 @@ export default function App(): React.ReactElement {
     };
 
     chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
-  }, [hydrate]);
+
+    // Re-hydrate when the user switches tabs or navigates to a new URL on
+    // the active tab — the cached JD/form state in the background is
+    // tab-keyed, so we need to refetch whenever the focused tab changes.
+    const onTabActivated = (_info: chrome.tabs.TabActiveInfo) => {
+      void refreshForActiveTab();
+    };
+    const onTabUpdated = (
+      _tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+      tab: chrome.tabs.Tab,
+    ) => {
+      if (!tab.active) return;
+      if (changeInfo.url || changeInfo.status === "complete") {
+        void refreshForActiveTab();
+      }
+    };
+    chrome.tabs.onActivated.addListener(onTabActivated);
+    chrome.tabs.onUpdated.addListener(onTabUpdated);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(listener);
+      chrome.tabs.onActivated.removeListener(onTabActivated);
+      chrome.tabs.onUpdated.removeListener(onTabUpdated);
+    };
+  }, [hydrate, refreshForActiveTab]);
 
   const onSignIn = () => {
     void sendBgMessage({ type: "OPEN_AUTH" });

@@ -169,25 +169,42 @@ function extractLever(): ExtractedJob | null {
 }
 
 function extractAshby(): ExtractedJob | null {
-  // Ashby renders into a React shell with dynamic class names; fall back to
-  // the largest text block if the attribute selectors miss.
+  // Modern Ashby uses dynamic CSS-in-JS class names, an Overview/Application
+  // tab pattern (app.ashbyhq.com/{company}/{slug}), and renders the JD body
+  // inside the active tab panel. Try a cascade of selectors, falling back
+  // to the largest text block on the page.
   const container =
     document.querySelector("[class*='_jobPostingBody']") ??
     document.querySelector("[class*='jobDescription']") ??
+    document.querySelector("[class*='_descriptionContainer']") ??
+    document.querySelector("[class*='_description_']") ??
+    document.querySelector("[data-testid*='description']") ??
+    document.querySelector("[role='tabpanel']") ??
+    document.querySelector("main") ??
     pickLargestTextBlock();
   if (!container) return null;
 
   const jdText = normalizeText(container.textContent ?? "");
-  if (jdText.length < 300) return null;
+  // Lower the floor slightly — Ashby JDs occasionally come in short.
+  if (jdText.length < 200) return null;
 
-  return {
-    jdText,
-    jobTitle: textFrom("h1") || document.title,
-    company: cleanCompanyName(
-      textFrom("[class*='_companyName']") ||
-        prettifySlug(location.pathname.split("/").filter(Boolean)[0] ?? ""),
-    ),
-  };
+  // Title: prefer h1; fall back to page title minus the company suffix.
+  let jobTitle = textFrom("h1");
+  if (!jobTitle) {
+    const t = (document.title ?? "").trim();
+    jobTitle =
+      t.split(/\s+[-—|@]\s+/)[0] ?? t.split(" at ")[0] ?? t;
+  }
+
+  const pathSlug = location.pathname.split("/").filter(Boolean)[0] ?? "";
+  const company = cleanCompanyName(
+    textFrom("[class*='_companyName']") ||
+      textFrom("[data-testid*='company']") ||
+      textFrom("header h2") ||
+      prettifySlug(pathSlug),
+  );
+
+  return { jdText, jobTitle, company };
 }
 
 function extractLinkedIn(): ExtractedJob | null {

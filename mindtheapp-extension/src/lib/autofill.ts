@@ -327,12 +327,31 @@ export function runAutofill(profile: AutofillProfile): AutofillResult {
  * Heuristic: does this page look like an apply form? Used by the content
  * script to send a lightweight FORM_DETECTED signal to the background so
  * the side panel can decide whether to surface the Autofill button.
+ *
+ * Returns a count of UNIQUE field keys we matched (not raw input count)
+ * so a form with first/last/email/phone all named the same way as a
+ * single key doesn't inflate the count. Plus a URL-based hint (`/apply`,
+ * `/application`) that lowers the threshold needed to surface the card.
  */
 export function detectApplyForm(): { candidateCount: number } {
   const inputs = candidateInputs();
-  let count = 0;
+  const matchedKeys = new Set<ProfileKey>();
   for (const input of inputs) {
-    if (matchRule(input)) count += 1;
+    const rule = matchRule(input);
+    if (rule) matchedKeys.add(rule.key);
   }
-  return { candidateCount: count };
+  const urlHintsApply = /\/(apply|application)(\/|$|\?)/i.test(
+    window.location.pathname,
+  );
+  // Without the URL hint, require ≥2 distinct fields. With it (we're
+  // clearly on an apply route), even a single matched field is enough
+  // to offer Autofill.
+  const candidateCount = matchedKeys.size;
+  if (urlHintsApply && candidateCount >= 1) {
+    return { candidateCount };
+  }
+  if (candidateCount >= 2) {
+    return { candidateCount };
+  }
+  return { candidateCount: 0 };
 }

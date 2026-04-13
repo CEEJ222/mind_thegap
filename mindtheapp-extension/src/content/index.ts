@@ -325,7 +325,7 @@ function detectAndReport(): void {
   // to decide whether to offer the "Autofill form" button.
   const formInfo = detectApplyForm();
   const formSignature = `${location.href}::${formInfo.candidateCount}`;
-  if (formInfo.candidateCount >= 2) {
+  if (formInfo.candidateCount > 0) {
     if (formSignature !== lastFormSignature) {
       lastFormSignature = formSignature;
       sendFormDetected({
