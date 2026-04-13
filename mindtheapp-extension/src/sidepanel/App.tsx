@@ -166,12 +166,18 @@ export default function App(): React.ReactElement {
       sendBgMessage<GetCurrentJdResponse>({ type: "GET_CURRENT_JD" }),
       sendBgMessage<GetCurrentFormResponse>({ type: "GET_CURRENT_FORM" }),
     ]);
-    setForm(formResp?.form ?? null);
-    setSaveState((prev) => (prev.kind === "applied" ? prev : { kind: "idle" }));
-    setAutofill({ kind: "idle" });
+    const incomingForm = formResp?.form ?? null;
+    setForm((prevForm) => {
+      const sameUrl =
+        prevForm && incomingForm && prevForm.pageUrl === incomingForm.pageUrl;
+      if (!sameUrl) {
+        // Different tab / different URL → reset transient per-job state.
+        setSaveState((prev) => (prev.kind === "applied" ? prev : { kind: "idle" }));
+        setAutofill((prev) => (prev.kind === "running" ? prev : { kind: "idle" }));
+      }
+      return incomingForm;
+    });
     setView((prev) => {
-      // Only views that represent "what's on the current tab right now"
-      // are safe to overwrite. Mid-flight states stay put.
       if (
         prev.kind === "authenticated-no-jd" ||
         prev.kind === "jd-detected"
@@ -224,15 +230,24 @@ export default function App(): React.ReactElement {
       if (msg && (msg as { type?: string }).type === "FORM_UPDATED") {
         const payload = msg as { type: string; payload?: ApplyFormSignal };
         if (payload.payload) {
-          setForm(payload.payload);
-          // User moved to a different form (or refreshed) — reset autofill
-          // state so the button shows "Autofill form" again.
-          setAutofill({ kind: "idle" });
+          const incoming = payload.payload;
+          setForm((prev) => {
+            // Only reset autofill state when the user has navigated to
+            // a different posting. If it's the same URL (just a DOM
+            // mutation — which our own autofill writes trigger!), keep
+            // whatever state the flow was in.
+            if (!prev || prev.pageUrl !== incoming.pageUrl) {
+              setAutofill({ kind: "idle" });
+            }
+            return incoming;
+          });
         }
       }
       if (msg && (msg as { type?: string }).type === "FORM_CLEARED") {
         setForm(null);
-        setAutofill({ kind: "idle" });
+        // Don't reset autofill state if the flow is in-flight — a
+        // mid-fill DOM mutation can transiently clear the form signal.
+        setAutofill((prev) => (prev.kind === "running" ? prev : { kind: "idle" }));
       }
     };
 
