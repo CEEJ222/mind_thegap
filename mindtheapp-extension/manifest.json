@@ -18,6 +18,8 @@
     "*://app.ashbyhq.com/*",
     "*://jobs.ashbyhq.com/*",
     "*://*.ashbyhq.com/*",
+    "*://ats.rippling.com/*",
+    "*://*.rippling.com/*",
     "*://linkedin.com/*",
     "*://*.linkedin.com/*"
   ],
@@ -38,6 +40,8 @@
         "*://app.ashbyhq.com/*",
         "*://jobs.ashbyhq.com/*",
         "*://*.ashbyhq.com/*",
+        "*://ats.rippling.com/*",
+        "*://*.rippling.com/*",
         "*://*.linkedin.com/jobs/*"
       ],
       "js": ["content/content.js"],

@@ -33,6 +33,7 @@ function detectAts(hostname: string): AtsType {
   if (h.includes("greenhouse.io")) return "greenhouse";
   if (h.includes("lever.co")) return "lever";
   if (h.includes("ashbyhq.com")) return "ashby";
+  if (h.includes("rippling.com")) return "rippling";
   if (h.includes("linkedin.com")) return "linkedin";
   return "generic";
 }
@@ -231,6 +232,42 @@ function extractAshby(): ExtractedJob | null {
   return { jdText, jobTitle, company };
 }
 
+function extractRippling(): ExtractedJob | null {
+  // URL shape: ats.rippling.com/{company-slug}/jobs/{uuid}
+  // Rippling ATS is a React SPA. We don't have a stable selector catalogue
+  // yet — start with patterns that have worked on similar shells and fall
+  // through to pickLargestTextBlock (which filters invisible panels).
+  const container =
+    document.querySelector("[class*='jobDescription']") ??
+    document.querySelector("[class*='JobDescription']") ??
+    document.querySelector("[class*='job-description']") ??
+    document.querySelector("[class*='_description']") ??
+    document.querySelector("[data-testid*='description']") ??
+    document.querySelector("[data-testid*='job']") ??
+    pickLargestTextBlock();
+  if (!container) return null;
+
+  const jdText = normalizeText(container.textContent ?? "");
+  if (jdText.length < 200) return null;
+
+  let jobTitle = textFrom("h1");
+  if (!jobTitle) {
+    const t = (document.title ?? "").trim();
+    jobTitle = t.split(/\s+[-—|@]\s+/)[0] ?? t.split(" at ")[0] ?? t;
+  }
+
+  // Company slug is the first path segment: /plenful/jobs/...
+  const pathSlug = location.pathname.split("/").filter(Boolean)[0] ?? "";
+  const company = cleanCompanyName(
+    textFrom("header [class*='company']") ||
+      textFrom("[class*='companyName']") ||
+      textFrom("[data-testid*='company']") ||
+      prettifySlug(pathSlug),
+  );
+
+  return { jdText, jobTitle, company };
+}
+
 function extractLinkedIn(): ExtractedJob | null {
   // TODO: LinkedIn DOM changes frequently; best-effort placeholder.
   const card = document.querySelector(".job-details-jobs-unified-top-card");
@@ -368,6 +405,9 @@ export function extractJobDescription(): JobDescriptionPayload | null {
       break;
     case "ashby":
       extracted = extractAshby();
+      break;
+    case "rippling":
+      extracted = extractRippling();
       break;
     case "linkedin":
       extracted = extractLinkedIn();

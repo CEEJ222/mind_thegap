@@ -67,7 +67,8 @@ type View =
 const SUPPORTED_ATS = [
   { label: "Greenhouse", color: "#3EB489" },
   { label: "Lever", color: "#5F3DC4" },
-  { label: "Ashby", color: "#1A1A1A" },
+  { label: "Ashby", color: "#F0A6CA" },
+  { label: "Rippling", color: "#FFAE00" },
   { label: "LinkedIn", color: "#0A66C2" },
 ];
 

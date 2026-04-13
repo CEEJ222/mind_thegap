@@ -1,4 +1,10 @@
-export type AtsType = "greenhouse" | "lever" | "ashby" | "linkedin" | "generic";
+export type AtsType =
+  | "greenhouse"
+  | "lever"
+  | "ashby"
+  | "rippling"
+  | "linkedin"
+  | "generic";
 
 export interface JobDescriptionPayload {
   jdText: string;
