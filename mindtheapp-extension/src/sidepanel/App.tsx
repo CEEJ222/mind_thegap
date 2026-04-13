@@ -8,15 +8,21 @@ import {
   exportResumeDocx,
   generateResume,
   getApplicationDeepLink,
+  getAutofillProfile,
   getProfile,
   getProfileDeepLink,
   getSavedJobsDeepLink,
+  getSettingsDeepLink,
   saveJob,
 } from "@/lib/api";
 import type {
   AnalyzeResponse,
+  ApplyFormSignal,
+  AutofillResult,
+  ContentScriptMessage,
   GenerateResumeResponse,
   GetAuthStateResponse,
+  GetCurrentFormResponse,
   GetCurrentJdResponse,
   JobDescriptionPayload,
   ProfileResponse,
@@ -86,10 +92,18 @@ type SaveState =
   | { kind: "applied" }
   | { kind: "error"; message: string };
 
+type AutofillState =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "done"; result: AutofillResult }
+  | { kind: "error"; message: string };
+
 export default function App(): React.ReactElement {
   const [view, setView] = useState<View>({ kind: "loading" });
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
+  const [form, setForm] = useState<ApplyFormSignal | null>(null);
+  const [autofill, setAutofill] = useState<AutofillState>({ kind: "idle" });
 
   const hydrate = useCallback(async () => {
     setError(null);
@@ -127,9 +141,11 @@ export default function App(): React.ReactElement {
       return;
     }
 
-    const jdResp = await sendBgMessage<GetCurrentJdResponse>({
-      type: "GET_CURRENT_JD",
-    });
+    const [jdResp, formResp] = await Promise.all([
+      sendBgMessage<GetCurrentJdResponse>({ type: "GET_CURRENT_JD" }),
+      sendBgMessage<GetCurrentFormResponse>({ type: "GET_CURRENT_FORM" }),
+    ]);
+    setForm(formResp?.form ?? null);
     if (jdResp?.jd) {
       setView({ kind: "jd-detected", profile, jd: jdResp.jd });
     } else {
@@ -173,6 +189,19 @@ export default function App(): React.ReactElement {
           setSaveState({ kind: "applied" });
         }
       }
+      if (msg && (msg as { type?: string }).type === "FORM_UPDATED") {
+        const payload = msg as { type: string; payload?: ApplyFormSignal };
+        if (payload.payload) {
+          setForm(payload.payload);
+          // User moved to a different form (or refreshed) — reset autofill
+          // state so the button shows "Autofill form" again.
+          setAutofill({ kind: "idle" });
+        }
+      }
+      if (msg && (msg as { type?: string }).type === "FORM_CLEARED") {
+        setForm(null);
+        setAutofill({ kind: "idle" });
+      }
     };
 
     chrome.runtime.onMessage.addListener(listener);
@@ -214,6 +243,51 @@ export default function App(): React.ReactElement {
 
   const onOpenSavedJobs = () => {
     void chrome.tabs.create({ url: getSavedJobsDeepLink() });
+  };
+
+  const onAutofill = async () => {
+    setAutofill({ kind: "running" });
+    try {
+      const profile = await getAutofillProfile();
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab?.id) {
+        setAutofill({
+          kind: "error",
+          message: "No active tab — reopen the side panel on the apply form.",
+        });
+        return;
+      }
+      const msg: ContentScriptMessage = { type: "AUTOFILL", profile };
+      const resp = await chrome.tabs
+        .sendMessage(tab.id, msg)
+        .catch(() => null);
+      if (!resp || resp.ok !== true) {
+        setAutofill({
+          kind: "error",
+          message:
+            resp?.error ??
+            "Content script didn't respond — try reloading the apply form page.",
+        });
+        return;
+      }
+      setAutofill({ kind: "done", result: resp.result as AutofillResult });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setView({ kind: "unauthenticated" });
+        return;
+      }
+      setAutofill({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Autofill failed",
+      });
+    }
+  };
+
+  const onOpenSettings = () => {
+    void chrome.tabs.create({ url: getSettingsDeepLink() });
   };
 
   const onAnalyze = async () => {
@@ -313,6 +387,22 @@ export default function App(): React.ReactElement {
         ) : null}
 
         {view.kind === "loading" && <LoadingBlock label="Loading…" />}
+
+        {/* Autofill card appears on any authenticated view when the content
+             script detected an apply-form on the current page. Positioned
+             above the JD / results / resume-ready views because it's the
+             most time-sensitive action. */}
+        {form &&
+          view.kind !== "loading" &&
+          view.kind !== "unauthenticated" &&
+          view.kind !== "no-profile" && (
+            <AutofillCard
+              form={form}
+              state={autofill}
+              onAutofill={() => void onAutofill()}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
 
         {view.kind === "unauthenticated" && (
           <UnauthenticatedView onSignIn={onSignIn} />
@@ -761,6 +851,112 @@ function ResumeReadyView({
       {docx.status === "error" && (
         <p className="text-[11px] text-tier-none">{docx.message}</p>
       )}
+    </div>
+  );
+}
+
+function AutofillCard({
+  form,
+  state,
+  onAutofill,
+  onOpenSettings,
+}: {
+  form: ApplyFormSignal;
+  state: AutofillState;
+  onAutofill: () => void;
+  onOpenSettings: () => void;
+}): React.ReactElement {
+  return (
+    <div className="mb-4 rounded-lg border border-turquoise/40 bg-turquoise/10 p-3 shadow-panel">
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-turquoise text-turquoise-ink"
+          aria-hidden
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 5h12M4 10h12M4 15h8" />
+            <path d="M15 14l2 2 4-4" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-turquoise">
+            Apply form detected
+          </p>
+          <p className="mt-0.5 text-xs text-panel-text">
+            {form.candidateCount} field{form.candidateCount === 1 ? "" : "s"} we
+            can autofill from your profile.
+          </p>
+        </div>
+      </div>
+
+      {state.kind === "done" ? (
+        <AutofillResultRow
+          result={state.result}
+          onRetry={onAutofill}
+          onOpenSettings={onOpenSettings}
+        />
+      ) : state.kind === "error" ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <Button onClick={onAutofill} className="w-full">
+            Try autofill again
+          </Button>
+          <p className="text-[11px] text-tier-none">{state.message}</p>
+        </div>
+      ) : (
+        <Button
+          onClick={onAutofill}
+          disabled={state.kind === "running"}
+          className="mt-3 w-full"
+        >
+          {state.kind === "running" ? "Filling…" : "Autofill form"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function AutofillResultRow({
+  result,
+  onRetry,
+  onOpenSettings,
+}: {
+  result: AutofillResult;
+  onRetry: () => void;
+  onOpenSettings: () => void;
+}): React.ReactElement {
+  const missing = result.fields.filter((f) => !f.filled);
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <div className="rounded-md border border-panel-border bg-panel-surface px-3 py-2 text-xs">
+        <p className="font-semibold text-panel-text">
+          ✓ Filled {result.filled} field{result.filled === 1 ? "" : "s"}
+          {result.skipped > 0
+            ? ` · skipped ${result.skipped}`
+            : ""}
+        </p>
+        {missing.length > 0 ? (
+          <p className="mt-1 text-[11px] text-panel-text-muted">
+            Missing or pre-filled: {missing.map((f) => f.label).join(", ")}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex gap-2">
+        <Button variant="ghost" onClick={onRetry} className="flex-1">
+          Re-run
+        </Button>
+        <Button variant="ghost" onClick={onOpenSettings} className="flex-1">
+          Edit profile
+        </Button>
+      </div>
     </div>
   );
 }
