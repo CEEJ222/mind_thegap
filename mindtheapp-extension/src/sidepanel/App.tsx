@@ -246,13 +246,22 @@ export default function App(): React.ReactElement {
   };
 
   const onAutofill = async () => {
+    console.debug("[mindtheapp] autofill click");
     setAutofill({ kind: "running" });
     try {
+      console.debug("[mindtheapp] fetching profile");
       const profile = await getAutofillProfile();
+      console.debug("[mindtheapp] profile", profile);
+
+      // Side panels live in a persistent Chrome UI surface. The active
+      // browser tab (the apply form) is what we want — query lastFocusedWindow
+      // to skip past any fullscreen/devtools windows that might confuse
+      // currentWindow resolution.
       const [tab] = await chrome.tabs.query({
         active: true,
-        currentWindow: true,
+        lastFocusedWindow: true,
       });
+      console.debug("[mindtheapp] target tab", tab?.id, tab?.url);
       if (!tab?.id) {
         setAutofill({
           kind: "error",
@@ -261,20 +270,27 @@ export default function App(): React.ReactElement {
         return;
       }
       const msg: ContentScriptMessage = { type: "AUTOFILL", profile };
-      const resp = await chrome.tabs
-        .sendMessage(tab.id, msg)
-        .catch(() => null);
+      let resp: { ok?: boolean; result?: AutofillResult; error?: string } | null =
+        null;
+      try {
+        resp = await chrome.tabs.sendMessage(tab.id, msg);
+      } catch (err) {
+        console.warn("[mindtheapp] sendMessage threw", err);
+        resp = null;
+      }
+      console.debug("[mindtheapp] content script response", resp);
       if (!resp || resp.ok !== true) {
         setAutofill({
           kind: "error",
           message:
             resp?.error ??
-            "Content script didn't respond — try reloading the apply form page.",
+            "Content script didn't respond — reload the apply form tab and try again.",
         });
         return;
       }
       setAutofill({ kind: "done", result: resp.result as AutofillResult });
     } catch (err) {
+      console.error("[mindtheapp] autofill failed", err);
       if (err instanceof ApiError && err.status === 401) {
         setView({ kind: "unauthenticated" });
         return;
