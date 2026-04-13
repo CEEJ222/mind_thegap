@@ -316,7 +316,13 @@ Return ONLY valid JSON, no markdown fences.`,
     return NextResponse.json({
       resume_id: resume?.id,
       file_path: filePath,
-      editorial_notes: result.editorial_notes,
+      // Match what gets persisted on the row so callers (e.g. the Chrome
+      // extension side panel) can read the markdown directly off the
+      // response without having to refetch the row.
+      editorial_notes: {
+        ...(result.editorial_notes ?? {}),
+        resume_content: result.resume_content,
+      },
     });
   } catch (err) {
     console.error("Resume generation error:", err);
