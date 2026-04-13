@@ -83,6 +83,7 @@ type SaveState =
   | { kind: "idle" }
   | { kind: "saving" }
   | { kind: "saved"; created: boolean }
+  | { kind: "applied" }
   | { kind: "error"; message: string };
 
 export default function App(): React.ReactElement {
@@ -163,6 +164,14 @@ export default function App(): React.ReactElement {
       }
       if (msg?.type === "AUTH_STATE_CHANGED") {
         void hydrate();
+      }
+      // Content script detected a post-apply confirmation page on a
+      // supported ATS. Flip the side panel to the "Applied" state.
+      if (msg && (msg as { type?: string }).type === "JOB_STATUS_UPDATED") {
+        const payload = msg as { type: string; status?: string };
+        if (payload.status === "applied") {
+          setSaveState({ kind: "applied" });
+        }
       }
     };
 
@@ -271,25 +280,25 @@ export default function App(): React.ReactElement {
   };
 
   return (
-    <div className="flex h-full flex-col bg-cream p-5">
+    <div className="flex h-full flex-col bg-panel-bg p-5">
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-turquoise text-ink"
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-turquoise text-turquoise-ink"
             aria-hidden
           >
             <span className="text-lg font-bold">M</span>
           </div>
           <div>
-            <h1 className="text-base font-bold leading-tight">Mind the App</h1>
-            <p className="text-[11px] text-muted">by jobseek.fyi</p>
+            <h1 className="text-base font-bold leading-tight text-panel-text">Mind the App</h1>
+            <p className="text-[11px] text-panel-text-muted">by jobseek.fyi</p>
           </div>
         </div>
         {view.kind !== "unauthenticated" && view.kind !== "loading" ? (
           <button
             type="button"
             onClick={() => void onSignOut()}
-            className="text-xs text-muted hover:text-ink"
+            className="text-xs text-panel-text-muted hover:text-panel-text transition-colors"
           >
             Sign out
           </button>
@@ -356,8 +365,8 @@ export default function App(): React.ReactElement {
 function LoadingBlock({ label }: { label: string }): React.ReactElement {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink/10 border-t-turquoise" />
-      <p className="text-sm text-muted">{label}</p>
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-panel-border border-t-turquoise" />
+      <p className="text-sm text-panel-text-muted">{label}</p>
     </div>
   );
 }
@@ -369,12 +378,12 @@ function UnauthenticatedView({
 }): React.ReactElement {
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-turquoise">
-        <span className="text-3xl font-bold text-ink">M</span>
+      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-turquoise shadow-[0_8px_20px_rgba(61,217,179,0.3)]">
+        <span className="text-3xl font-bold text-turquoise-ink">M</span>
       </div>
       <div>
-        <h2 className="text-lg font-bold">Welcome to Mind the App</h2>
-        <p className="mt-1 text-sm text-muted">
+        <h2 className="text-lg font-bold text-panel-text">Welcome to Mind the App</h2>
+        <p className="mt-1 text-sm text-panel-text-muted">
           AI-powered gap analysis & resume generation
         </p>
       </div>
@@ -394,8 +403,8 @@ function NoProfileView({
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <div className="text-2xl">📋</div>
       <div>
-        <h2 className="text-sm font-bold">Add your profile first</h2>
-        <p className="mt-1 text-xs text-muted">
+        <h2 className="text-sm font-bold text-panel-text">Add your profile first</h2>
+        <p className="mt-1 text-xs text-panel-text-muted">
           We need your experience, projects, and skills before we can
           analyze a job posting or generate a tailored resume.
         </p>
@@ -403,7 +412,7 @@ function NoProfileView({
       <Button onClick={onOpenProfile} className="mt-2 w-full">
         Open profile on jobseek.fyi ↗
       </Button>
-      <p className="text-[11px] text-muted">
+      <p className="text-[11px] text-panel-text-faint">
         Come back to this side panel once you&apos;ve added a few entries.
       </p>
     </div>
@@ -415,8 +424,8 @@ function NoJdView(): React.ReactElement {
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <div className="text-2xl">🔍</div>
       <div>
-        <h2 className="text-sm font-bold">Navigate to a job posting</h2>
-        <p className="mt-1 text-xs text-muted">
+        <h2 className="text-sm font-bold text-panel-text">Navigate to a job posting</h2>
+        <p className="mt-1 text-xs text-panel-text-muted">
           Open any supported ATS and we&apos;ll detect the description
           automatically.
         </p>
@@ -425,9 +434,9 @@ function NoJdView(): React.ReactElement {
         {SUPPORTED_ATS.map((a) => (
           <div
             key={a.label}
-            className="rounded-md border border-ink/10 bg-white/60 px-3 py-2 text-center text-xs font-semibold"
-            style={{ color: a.color }}
+            className="rounded-md border border-panel-border bg-panel-surface px-3 py-2 text-center text-xs font-semibold text-panel-text"
           >
+            <span className="inline-block h-2 w-2 rounded-full mr-1.5" style={{ background: a.color }} />
             {a.label}
           </div>
         ))}
@@ -452,16 +461,16 @@ function JdDetectedView({
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-turquoise">
           {jd.atsType}
         </p>
-        <h2 className="mt-1 text-base font-bold leading-snug">
+        <h2 className="mt-1 text-base font-bold leading-snug text-panel-text">
           {jd.jobTitle || "Untitled role"}
         </h2>
         {jd.company ? (
-          <p className="mt-0.5 text-sm text-muted">{jd.company}</p>
+          <p className="mt-0.5 text-sm text-panel-text-muted">{jd.company}</p>
         ) : null}
-        <p className="mt-3 line-clamp-5 text-xs text-ink/70">
+        <p className="mt-3 line-clamp-5 text-xs text-panel-text-muted">
           {jd.jdText.slice(0, 400)}
           {jd.jdText.length > 400 ? "…" : ""}
         </p>
@@ -487,6 +496,27 @@ function SaveJobButton({
   onSave: () => void;
   onOpenSavedJobs: () => void;
 }): React.ReactElement {
+  if (saveState.kind === "applied") {
+    return (
+      <div className="flex items-center justify-between rounded-md border border-turquoise/40 bg-turquoise/10 px-3 py-2 text-xs">
+        <span className="flex items-center gap-2 font-semibold text-turquoise">
+          <span
+            className="inline-block h-2 w-2 rounded-full bg-turquoise"
+            aria-hidden
+          />
+          Applied — status updated
+        </span>
+        <button
+          type="button"
+          onClick={onOpenSavedJobs}
+          className="text-turquoise underline-offset-2 hover:underline"
+        >
+          Applications →
+        </button>
+      </div>
+    );
+  }
+
   if (saveState.kind === "saved") {
     return (
       <div className="flex items-center justify-between rounded-md border border-tier-strong/30 bg-tier-strong/10 px-3 py-2 text-xs">
@@ -542,7 +572,7 @@ function ResultsView({
   return (
     <div className="flex flex-col gap-4">
       <Card className="text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
           Overall Fit
         </p>
         <p
@@ -553,32 +583,32 @@ function ResultsView({
         >
           {Math.round(analysis.fit_score)}
         </p>
-        <p className="mt-0.5 text-xs text-muted">
+        <p className="mt-0.5 text-xs text-panel-text-muted">
           {analysis.job_title}
           {analysis.company_name ? ` · ${analysis.company_name}` : ""}
         </p>
       </Card>
 
       <div className="flex flex-col gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
           Themes
         </p>
         {orderedThemes.map((t) => (
           <div
             key={t.id}
-            className="rounded-md border border-ink/10 bg-white/60 px-3 py-2"
+            className="rounded-md border border-panel-border bg-panel-surface px-3 py-2"
           >
             <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm font-semibold">{t.theme_name}</p>
+              <p className="truncate text-sm font-semibold text-panel-text">{t.theme_name}</p>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs font-semibold tabular-nums text-ink/70">
+                <span className="text-xs font-semibold tabular-nums text-panel-text-muted">
                   {t.score_numeric}
                 </span>
                 <TierBadge tier={t.score_tier} />
               </div>
             </div>
             {t.explanation ? (
-              <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-muted">
+              <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-panel-text-muted">
                 {t.explanation}
               </p>
             ) : null}
@@ -667,10 +697,10 @@ function ResumeReadyView({
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-panel-text-muted">
           Tailored Resume
         </p>
-        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-cream/60 p-3 text-[11px] leading-relaxed text-ink">
+        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-panel-border bg-panel-bg p-3 text-[11px] leading-relaxed text-panel-text">
           {markdown || "(Resume content unavailable — regenerate or open in jobseek.fyi)"}
         </pre>
       </Card>
@@ -740,19 +770,19 @@ function DocxDragChip({
     <div
       draggable
       onDragStart={onDragStart}
-      className="group flex cursor-grab items-center gap-3 rounded-md border border-turquoise/40 bg-turquoise/10 px-3 py-2 active:cursor-grabbing"
+      className="group flex cursor-grab items-center gap-3 rounded-md border border-turquoise/40 bg-turquoise/10 px-3 py-2 active:cursor-grabbing hover:border-turquoise/70 hover:bg-turquoise/15 transition-colors"
       role="button"
       aria-label="Drag resume to upload field"
       title="Drag onto an upload field or the desktop"
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-turquoise text-ink">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-turquoise text-turquoise-ink">
         <span className="text-[10px] font-bold">DOCX</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-semibold text-ink">
+        <p className="truncate text-xs font-semibold text-panel-text">
           {filename}
         </p>
-        <p className="text-[11px] text-muted">
+        <p className="text-[11px] text-panel-text-muted">
           Drag onto an upload field →
         </p>
       </div>

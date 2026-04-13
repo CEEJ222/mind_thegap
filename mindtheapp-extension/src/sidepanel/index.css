@@ -8,9 +8,30 @@ body,
   height: 100%;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
-  background: #f5eddc;
-  color: #1a1a1a;
+  background: #141817;
+  color: #F5EDDC;
+}
+
+/* Scrollbar styling — subtle, stays dark-native. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2E3836;
+  border-radius: 999px;
+  border: 2px solid #141817;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3A4643;
 }

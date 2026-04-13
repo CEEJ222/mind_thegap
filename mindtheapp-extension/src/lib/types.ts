@@ -61,12 +61,30 @@ export interface SaveJobResponse {
   created: boolean;
 }
 
+/** Response body of POST /api/jobs/mark-applied. */
+export interface MarkAppliedResponse {
+  job_id: string;
+  status: "applied";
+  previous_status: string | null;
+}
+
+/** Minimal payload for applied-detection — the full JD isn't always available
+ *  on a confirmation page, so we ship just what the extractor could find. */
+export interface AppliedDetectionPayload {
+  pageUrl: string;
+  jobUrl: string;
+  title?: string;
+  company?: string;
+  atsType?: AtsType;
+}
+
 /** Messages exchanged with the background service worker. */
 export type ExtensionMessage =
   | { type: "OPEN_AUTH" }
   | { type: "OPEN_SIDE_PANEL" }
   | { type: "AUTH_SUCCESS"; token: string }
   | { type: "JD_DETECTED"; payload: JobDescriptionPayload }
+  | { type: "APPLIED_DETECTED"; payload: AppliedDetectionPayload }
   | { type: "GET_CURRENT_JD" }
   | { type: "GET_AUTH_STATE" }
   | { type: "SIGN_OUT" };

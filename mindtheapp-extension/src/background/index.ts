@@ -1,5 +1,7 @@
 import { clearToken, storeToken } from "../lib/auth";
+import { markApplied, ApiError } from "../lib/api";
 import type {
+  AppliedDetectionPayload,
   ExtensionMessage,
   GetAuthStateResponse,
   GetCurrentJdResponse,
@@ -78,6 +80,46 @@ function handleJdDetected(
     });
 }
 
+/** De-dupe mark-applied calls across reloads within the same SW lifetime. */
+const appliedInFlight = new Set<string>();
+
+async function handleAppliedDetected(
+  payload: AppliedDetectionPayload,
+): Promise<void> {
+  if (appliedInFlight.has(payload.jobUrl)) return;
+  appliedInFlight.add(payload.jobUrl);
+  try {
+    const resp = await markApplied({
+      url: payload.jobUrl,
+      title: payload.title,
+      company: payload.company,
+      atsType: payload.atsType,
+    });
+    chrome.runtime
+      .sendMessage({
+        type: "JOB_STATUS_UPDATED",
+        jobUrl: payload.jobUrl,
+        status: resp.status,
+        previousStatus: resp.previous_status,
+      })
+      .catch(() => {
+        /* side panel may not be open */
+      });
+  } catch (err) {
+    // 401 etc — just log; content script will retry on next navigation.
+    if (err instanceof ApiError) {
+      console.warn(
+        "[mindtheapp] mark-applied failed:",
+        err.status,
+        err.message,
+      );
+    } else {
+      console.error("[mindtheapp] mark-applied error:", err);
+    }
+    appliedInFlight.delete(payload.jobUrl);
+  }
+}
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   latestJdByTab.delete(tabId);
 });
@@ -116,6 +158,11 @@ chrome.runtime.onMessage.addListener(
 
       case "JD_DETECTED":
         handleJdDetected(msg.payload, sender.tab?.id);
+        sendResponse({ ok: true });
+        return false;
+
+      case "APPLIED_DETECTED":
+        void handleAppliedDetected(msg.payload);
         sendResponse({ ok: true });
         return false;
 
