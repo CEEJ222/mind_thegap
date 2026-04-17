@@ -272,16 +272,23 @@ export async function PATCH(request: NextRequest) {
       .select("*")
       .eq("user_id", patch_user_id);
 
-    const profileContext = (patchChunks ?? [])
+    let profileContext = (patchChunks ?? [])
       .map(
         (c: Record<string, string | null>) =>
           `[${c.company_name || "Unknown"} | ${c.job_title || "Unknown"}] ${c.chunk_text}`
       )
       .join("\n");
 
+    const MAX_PROFILE_CHARS = 120_000;
+    if (profileContext.length > MAX_PROFILE_CHARS) {
+      profileContext =
+        "[Earlier profile chunks omitted for length.]\n\n" +
+        profileContext.slice(-MAX_PROFILE_CHARS);
+    }
+
     const text = await chatCompletion({
       model: MODELS.LIGHT,
-      max_tokens: 1024,
+      max_tokens: 1536,
       messages: [
         {
           role: "user",
@@ -294,7 +301,7 @@ export async function PATCH(request: NextRequest) {
 ${app?.jd_text ?? ""}
 
 ## Updated Candidate Profile (includes new evidence):
-${profileContext}
+${profileContext || "No profile chunks."}
 
 ## Scoring Rules:
 - "strong" = score 75-100: Clear, direct evidence in the profile
@@ -302,12 +309,11 @@ ${profileContext}
 - "none" = score 0-34: No evidence found
 - The score_numeric MUST match the tier range above
 
-Respond with JSON only:
-{
-  "score_tier": "strong" | "weak" | "none",
-  "score_numeric": number (must match tier range),
-  "explanation": "string"
-}`,
+Return one JSON object with exactly these keys: "score_tier", "score_numeric", "explanation".
+The "explanation" string must be valid JSON: use \\n for line breaks inside the string, or write one paragraph with no raw line breaks inside the quotes.
+
+Example shape (replace with real values):
+{"score_tier":"weak","score_numeric":55,"explanation":"Bullet one.\\nBullet two."}`,
         },
       ],
     });
@@ -319,7 +325,12 @@ Respond with JSON only:
     };
     try {
       updated = JSON.parse(text) as typeof updated;
-    } catch {
+    } catch (e) {
+      console.error(
+        "[rescore] JSON.parse failed; model output (first 1200 chars):",
+        text.slice(0, 1200),
+        e
+      );
       return NextResponse.json(
         { error: "Could not parse rescore from the model", code: "PARSE_ERROR" },
         { status: 422 }

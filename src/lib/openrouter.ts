@@ -24,6 +24,12 @@ export const MODELS = {
   ),
   // Light tasks: single theme rescore, summaries
   LIGHT: envModel("OPENROUTER_MODEL_LIGHT", "anthropic/claude-3.5-haiku"),
+  // Premium: nuanced long-form writing (screening question answers).
+  // Opus produces noticeably richer first-person narrative than 3.7 Sonnet.
+  PREMIUM: envModel(
+    "OPENROUTER_MODEL_PREMIUM",
+    "anthropic/claude-opus-4"
+  ),
 };
 
 interface OpenRouterMessage {
@@ -54,6 +60,8 @@ interface OpenRouterOptions {
   temperature?: number;
   /** Extra OpenRouter `provider` fields; merged with env-based preferences. */
   provider?: Record<string, unknown>;
+  /** When set, requests JSON-only output (OpenAI-compatible; supported by many OpenRouter models). */
+  response_format?: { type: "json_object" };
 }
 
 /**
@@ -83,20 +91,73 @@ export function normalizeAssistantContent(data: {
 }
 
 /**
+ * Extract the first balanced JSON object or array, respecting strings (so `}` inside
+ * "explanation" values does not terminate early). Greedy `/\{[\s\S]*\}/` breaks on that.
+ */
+function extractBalancedJson(text: string): string | null {
+  const start = text.search(/[\[{]/);
+  if (start === -1) return null;
+
+  const openToClose: Record<string, string> = { "{": "}", "[": "]" };
+  const first = text[start];
+  if (first !== "{" && first !== "[") return null;
+
+  const stack: string[] = [openToClose[first]];
+  let inString = false;
+  let escape = false;
+
+  for (let i = start + 1; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (c === "\\") {
+        escape = true;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "{" || c === "[") {
+      stack.push(openToClose[c]);
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      const expected = stack.pop();
+      if (expected !== c) return null;
+      if (stack.length === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
  * Extract JSON from a response that may contain markdown fences or extra text.
  */
 function extractJSON(text: string): string {
-  // Try to find JSON inside markdown code fences
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) return fenceMatch[1].trim();
+  if (typeof text !== "string") return "";
+  const trimmed = text.trim();
+  if (!trimmed) return "";
 
-  // Try to find a JSON object or array
-  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) {
+    const inner = fenceMatch[1].trim();
+    return extractBalancedJson(inner) ?? inner;
+  }
+
+  const balanced = extractBalancedJson(trimmed);
+  if (balanced) return balanced;
+
+  const jsonMatch = trimmed.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (jsonMatch) return jsonMatch[1].trim();
 
-  // Return as-is and let JSON.parse handle the error
-  if (typeof text !== "string") return "";
-  return text.trim();
+  return trimmed;
 }
 
 export async function chatCompletion(options: OpenRouterOptions): Promise<string> {
@@ -120,6 +181,7 @@ export async function chatCompletion(options: OpenRouterOptions): Promise<string
       max_tokens: options.max_tokens ?? 4096,
       temperature: options.temperature ?? 0.3,
       ...(hasProvider ? { provider: mergedProvider } : {}),
+      ...(options.response_format ? { response_format: options.response_format } : {}),
     }),
   });
 

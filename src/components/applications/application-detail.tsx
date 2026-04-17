@@ -9,6 +9,7 @@ import { cn, getScoreTierIcon, getFitScoreColor } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import type { Database, InterviewStatus } from "@/lib/types/database";
 import { GeneratedResumesPanel } from "@/components/applications/generated-resumes-panel";
+import { ScreeningQuestionsPanel } from "@/components/applications/screening-questions-panel";
 
 type Application = Database["public"]["Tables"]["applications"]["Row"];
 type Theme = Database["public"]["Tables"]["application_themes"]["Row"];
@@ -207,6 +208,10 @@ export function ApplicationDetail({
           onUpdate={onUpdate}
         />
       )}
+
+      <div className="mt-6">
+        <ScreeningQuestionsPanel application={application} />
+      </div>
     </div>
   );
 }

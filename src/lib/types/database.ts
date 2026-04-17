@@ -357,6 +357,57 @@ export interface Database {
           version?: number;
         };
       };
+      application_questions: {
+        Row: {
+          id: string;
+          user_id: string;
+          application_id: string;
+          question_text: string;
+          answer_text: string | null;
+          answer_length: "short" | "medium" | "long";
+          tone: string | null;
+          word_limit: number | null;
+          source_chunk_ids: string[];
+          source_resume_id: string | null;
+          model: string | null;
+          prompt_version: string | null;
+          gaps: string[];
+          confidence: number | null;
+          position: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          application_id: string;
+          question_text: string;
+          answer_text?: string | null;
+          answer_length?: "short" | "medium" | "long";
+          tone?: string | null;
+          word_limit?: number | null;
+          source_chunk_ids?: string[];
+          source_resume_id?: string | null;
+          model?: string | null;
+          prompt_version?: string | null;
+          gaps?: string[];
+          confidence?: number | null;
+          position?: number;
+        };
+        Update: {
+          question_text?: string;
+          answer_text?: string | null;
+          answer_length?: "short" | "medium" | "long";
+          tone?: string | null;
+          word_limit?: number | null;
+          source_chunk_ids?: string[];
+          source_resume_id?: string | null;
+          model?: string | null;
+          prompt_version?: string | null;
+          gaps?: string[];
+          confidence?: number | null;
+          position?: number;
+        };
+      };
       jobs: {
         Row: {
           id: string;
