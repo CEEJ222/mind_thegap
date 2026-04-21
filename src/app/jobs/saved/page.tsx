@@ -11,7 +11,6 @@ import {
   BookmarkCheck,
   Sparkles,
   MapPin,
-  Building2,
   Clock,
   Users,
   DollarSign,
@@ -25,6 +24,7 @@ import {
   Zap,
   Send,
 } from "lucide-react";
+import { CompanyLogo } from "@/components/jobs/company-logo";
 import { detectATS } from "@/lib/ats-detect";
 import { useRouter } from "next/navigation";
 import type { JobStatus } from "@/lib/types/database";
@@ -553,12 +553,7 @@ export default function SavedJobsPage() {
                   <div className="flex gap-3 sm:gap-4">
                     {/* Company Logo */}
                     <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] sm:h-12 sm:w-12">
-                      {job.company_logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={job.company_logo} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <Building2 size={20} className="text-[var(--text-faint)]" />
-                      )}
+                      <CompanyLogo logoUrl={job.company_logo} companyName={job.company_name} />
                       {isProcessing && (
                         <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-base)]/80">
                           <Loader2 size={16} className="animate-spin text-[var(--accent)]" />
