@@ -20,7 +20,8 @@ function renderMarkdown(md: string): string {
     if (firstLine && line.includes("|")) {
       firstLine = false;
       const parts = line.split("|").map((p) => p.trim());
-      const name = parts[0] || "";
+      // Strip Markdown heading markers if the model used "# Name | …" on one line
+      const name = (parts[0] || "").replace(/^#+\s*/, "").trim();
       const rest = parts.slice(1).filter(Boolean).join("  ·  ");
       html.push(
         `<div class="resume-header"><div class="resume-name">${esc(name)}</div><div class="resume-contact">${esc(rest)}</div></div>`
