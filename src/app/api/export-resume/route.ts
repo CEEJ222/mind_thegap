@@ -211,6 +211,20 @@ function markdownToDocxParagraphs(content: string): Paragraph[] {
   return paragraphs;
 }
 
+// Content-Disposition header values must be ByteString (latin-1). Strip any
+// char > 0xFF for the legacy `filename=` param and emit RFC 5987
+// `filename*=UTF-8''…` so the original unicode reaches modern browsers.
+function contentDispositionFilename(name: string): string {
+  const ascii = name
+    .replace(/[–—−]/g, "-") // en-dash, em-dash, minus
+    .replace(/[‘’]/g, "'") // curly singles
+    .replace(/[“”]/g, '"') // curly doubles
+    .replace(/[^\x20-\x7E]/g, "_") // anything else outside printable ASCII
+    .replace(/["\\]/g, "_"); // header-quote-safe
+  const encoded = encodeURIComponent(name);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 function parseBoldText(text: string): TextRun[] {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts
@@ -319,7 +333,7 @@ export async function POST(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "Content-Disposition": `attachment; filename="${file_name}.docx"`,
+          "Content-Disposition": contentDispositionFilename(`${file_name}.docx`),
         },
       });
     }
@@ -328,7 +342,7 @@ export async function POST(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "text/plain",
-        "Content-Disposition": `attachment; filename="${file_name}.md"`,
+        "Content-Disposition": contentDispositionFilename(`${file_name}.md`),
       },
     });
   } catch (err) {
